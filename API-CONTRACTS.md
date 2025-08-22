@@ -175,6 +175,212 @@ Authorization: Bearer {token}
 }
 ```
 
+## 👤 User Profile Management
+
+### Get User Profile
+```http
+GET /api/user/profile
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "profile": {
+      "id": "user_123",
+      "email": "user@example.com",
+      "name": "John Doe",
+      "bio": "Book lover and storyteller",
+      "picture": "https://audiobook-dev.sunny250486.workers.dev/api/assets/profile-images/user_123_1704108600.jpg",
+      "defaultLanguage": "en",
+      "lastLoginAt": "2024-01-15T10:30:00Z",
+      "totalReadingTime": 7200,
+      "storiesCompleted": 15,
+      "preferredLanguage": "en",
+      "timezone": "America/New_York",
+      "subscriptionTier": "premium",
+      "createdAt": "2023-06-01T12:00:00Z",
+      "updatedAt": "2024-01-15T10:30:00Z"
+    },
+    "preferences": {
+      "userId": "user_123",
+      "version": 1,
+      "needsSync": false,
+      "defaultLanguage": "en",
+      "preferredReadingMode": "read",
+      "fontSize": "medium",
+      "fontFamily": "system",
+      "lineHeight": 1.6,
+      "theme": "auto",
+      "audioPlaybackSpeed": 1.0,
+      "autoPlayNextChapter": true,
+      "backgroundAudio": false,
+      "skipSilence": false,
+      "pageTurnAnimation": true,
+      "readingProgressIndicator": true,
+      "chapterCompletionCelebration": true,
+      "syncEnabled": true,
+      "offlineSync": true,
+      "wifiOnlySync": false,
+      "syncFrequency": "immediate",
+      "readingReminders": false,
+      "reminderTime": "19:00",
+      "reminderDays": [1, 2, 3, 4, 5],
+      "newContentNotifications": true,
+      "achievementNotifications": true,
+      "bookmarkNotifications": true,
+      "analyticsEnabled": true,
+      "shareReadingProgress": false,
+      "highContrast": false,
+      "reduceMotion": false,
+      "screenReaderOptimized": false,
+      "updatedAt": "2024-01-15T10:30:00Z",
+      "lastSyncedAt": "2024-01-15T10:30:00Z"
+    }
+  }
+}
+```
+
+### Update User Profile
+```http
+PATCH /api/user/profile
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "profile": {
+    "name": "Updated Name",
+    "bio": "Updated bio text",
+    "defaultLanguage": "es"
+  },
+  "preferences": {
+    "theme": "dark",
+    "audioPlaybackSpeed": 1.5,
+    "fontSize": "large"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Profile updated successfully",
+  "updated": {
+    "profile": true,
+    "preferences": true
+  }
+}
+```
+
+### Upload Profile Image
+```http
+POST /api/user/profile/image
+Authorization: Bearer {token}
+Content-Type: multipart/form-data
+
+FormData:
+  image: File (JPEG/PNG, max 5MB, recommended 512x512px)
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "imageUrl": "https://audiobook-dev.sunny250486.workers.dev/api/assets/profile-images/user_123_1704108600.jpg"
+  }
+}
+```
+
+## 📊 User Statistics
+
+### Get Reading Statistics
+```http
+GET /api/user/statistics
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "books_read": 12,
+    "total_reading_time_minutes": 1440,
+    "current_streak_days": 7,
+    "longest_streak_days": 21,
+    "chapters_completed": 156,
+    "favorite_genre": "Fantasy",
+    "reading_sessions": 89,
+    "average_session_time_minutes": 16,
+    "last_reading_date": "2024-01-15T22:30:00Z",
+    "achievements": [
+      {
+        "id": "first_book",
+        "name": "First Chapter",
+        "description": "Complete your first chapter",
+        "earned_at": "2023-06-01T15:00:00Z"
+      },
+      {
+        "id": "book_lover",
+        "name": "Book Lover",
+        "description": "Complete 5 stories",
+        "earned_at": "2024-01-15T22:30:00Z"
+      }
+    ]
+  }
+}
+```
+
+## 🛠️ Support System
+
+### Get FAQs
+```http
+GET /api/support/faqs?category={category}&language={language}
+```
+
+**Query Parameters:**
+- `category` (optional): Filter by category (`general`, `technical`, `customization`)
+- `language` (optional): FAQ language (default: `en`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "faq_001",
+      "question": "How do I download stories for offline reading?",
+      "answer": "To download stories for offline reading, tap the download icon on any story. You can manage your downloads in the Library section under 'Downloaded'.",
+      "category": "general",
+      "order": 1
+    },
+    {
+      "id": "faq_002",
+      "question": "Can I change the reading speed of audiobooks?",
+      "answer": "Yes! While playing an audiobook, tap the playback speed button (usually shows '1x') and select your preferred speed from 0.5x to 2.0x.",
+      "category": "technical",
+      "order": 2
+    }
+  ]
+}
+```
+
+## 🖼️ Asset Management
+
+### Serve Profile Images
+```http
+GET /api/assets/profile-images/{filename}
+```
+
+**Response**: Binary image data with proper caching headers
+- Content-Type: `image/jpeg` or `image/png`
+- Cache-Control: `public, max-age=31536000` (1 year)
+- ETag and Last-Modified headers for efficient caching
+
 ## 📊 Story Discovery Endpoints
 
 ### Story Listing
@@ -211,7 +417,30 @@ GET /api/stories/search?q={query}&language={language}
 
 ## ⚠️ Error Handling
 
-### Standard Error Response
+### Standard Success Response (Profile & Support APIs)
+```json
+{
+  "success": true,
+  "message": "Optional success message",
+  "data": {
+    // Response data
+  }
+}
+```
+
+### Standard Error Response (Profile & Support APIs)
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "error_code": "ERROR_CODE",
+  "details": {
+    // Optional additional error details
+  }
+}
+```
+
+### Legacy Error Response (Content APIs)
 ```json
 {
   "error": {
@@ -229,9 +458,38 @@ GET /api/stories/search?q={query}&language={language}
 - `200`: Success
 - `400`: Bad Request (invalid parameters)
 - `401`: Unauthorized (missing/invalid token)
-- `404`: Not Found (story/chapter doesn't exist)
+- `403`: Forbidden (insufficient permissions)
+- `404`: Not Found (resource doesn't exist)
+- `413`: Payload Too Large (file upload too big)
+- `422`: Unprocessable Entity (validation errors)
 - `429`: Rate Limited
 - `500`: Internal Server Error
+
+### Example Error Responses
+
+**File Too Large (413)**:
+```json
+{
+  "success": false,
+  "message": "Profile image too large. Maximum size is 5MB.",
+  "error_code": "FILE_TOO_LARGE"
+}
+```
+
+**Validation Error (400)**:
+```json
+{
+  "success": false,
+  "message": "Invalid file type. Only JPEG and PNG images are allowed."
+}
+```
+
+**Authentication Error (401)**:
+```json
+{
+  "error": "Missing or invalid Authorization header"
+}
+```
 
 ## 🔄 Rate Limiting
 
@@ -254,15 +512,33 @@ GET /api/stories/search?q={query}&language={language}
 3. **Authentication**: Include Bearer token in protected endpoints
 4. **Caching**: Implement client-side caching for metadata and content
 
+## 🚀 Recently Implemented (v1.1.0)
+
+✅ **User Profile Management**
+- GET `/api/user/profile` - Complete profile and preferences
+- PATCH `/api/user/profile` - Update profile and preferences
+- POST `/api/user/profile/image` - Profile image upload
+
+✅ **User Statistics & Analytics**
+- GET `/api/user/statistics` - Reading statistics and achievements
+
+✅ **Support System**
+- GET `/api/support/faqs` - FAQ system with filtering
+
+✅ **Asset Management**
+- GET `/api/assets/profile-images/{filename}` - Profile image serving
+
 ## 🚀 Future Endpoints (Planned)
 
-- `/api/stories/recommended`: Personalized recommendations
-- `/api/user/preferences`: User preference management
-- `/api/content/{storyId}/analytics`: Content analytics
+- `/api/stories/recommended`: Personalized recommendations based on reading history
+- `/api/support/tickets`: Support ticket system (chat integration planned)
+- `/api/user/cache-info`: Cache management endpoints
+- `/api/content/{storyId}/analytics`: Content analytics and engagement metrics
 - `/api/admin/content`: Content management endpoints
+- `/api/user/leaderboards`: Reading competitions and leaderboards
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: August 20, 2025  
-**Status**: ✅ Active Implementation
+**Version**: 1.1.0  
+**Last Updated**: August 21, 2025  
+**Status**: ✅ Active Implementation with Profile Features
