@@ -127,6 +127,32 @@ paths:
                         type: boolean
                         example: false
 
+  # Health Check
+  /api/health:
+    get:
+      tags:
+        - System
+      summary: Health check
+      description: Returns the health status of the API
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-08-24T15:59:46.476Z"
+                  version:
+                    type: string
+                    example: "1.0.0"
+
   # Stories Endpoints
   /api/stories:
     get:
@@ -1339,6 +1365,77 @@ paths:
         '401':
           description: Unauthorized
 
+  # User Progress Tracking
+  /api/user/progress:
+    get:
+      tags:
+        - User Progress
+      summary: Get user reading progress
+      description: Returns reading progress across all stories
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Progress data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        storyId:
+                          type: string
+                        chapterId:
+                          type: string
+                        progressPercent:
+                          type: number
+                        lastAccessed:
+                          type: string
+                          format: date-time
+
+  # User Bookmarks
+  /api/user/bookmarks:
+    get:
+      tags:
+        - User Bookmarks
+      summary: Get user bookmarks
+      description: Returns user's saved bookmarks
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Bookmarks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  bookmarks:
+                    type: array
+                    items:
+                      type: object
+
+  # User Sync
+  /api/user/sync:
+    post:
+      tags:
+        - User Sync
+      summary: Sync user data across devices
+      description: Synchronize user progress and settings across devices
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Sync completed successfully
+
   # Support System
   /api/support/faqs:
     get:
@@ -1430,6 +1527,82 @@ paths:
                   error:
                     type: string
                     example: "Profile image not found"
+
+  # Search Endpoints
+  /api/search:
+    get:
+      tags:
+        - Search
+      summary: Search stories and content
+      description: Search across stories, authors, and content with autocomplete
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Maximum number of results
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+                        type:
+                          type: string
+                          enum: [story, author, genre]
+
+  # Random Story Suggestion
+  /api/surprise-me:
+    get:
+      tags:
+        - Discovery
+      summary: Get random story suggestion
+      description: Returns a random story recommendation for discovery
+      responses:
+        '200':
+          description: Random story suggestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  story:
+                    $ref: '#/components/schemas/Story'
+
+  # Database Migration Tools
+  /api/migrate:
+    post:
+      tags:
+        - Administration
+      summary: Execute database migrations
+      description: Execute pending database migrations (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Migration completed successfully
+        '403':
+          description: Insufficient permissions
 
   # Billing Endpoints (Dodo Payments Integration)
   /api/billing/plans:
