@@ -309,100 +309,36 @@ paths:
     get:
       tags:
         - Content
-      summary: Get complete story metadata with content blocks
+      summary: Get story metadata
       description: |
-        **ENHANCED METADATA ENDPOINT** - Returns complete story metadata with all content blocks, assets, and chapter data.
+        **UNIFIED CONTENT ENDPOINT** - Returns story metadata directly from R2 storage per UNIFIED-CONTENT-SPEC.md
         
-        This endpoint has been upgraded to support the new unified content architecture:
-        - **Complete Content Blocks**: All text, image, audio, and heading blocks with proper ordering
-        - **Asset Integration**: Full asset manifest with URLs and metadata
-        - **Unified Structure**: Single source of truth for all story content
-        - **Backward Compatibility**: Graceful fallback to legacy data when complete metadata unavailable
+        **R2 Storage:** `stories/{storyId}/{language}/metadata.json`
         
-        **Response Format**:
+        **Response Format (Direct from metadata.json):**
         ```json
         {
-          "story": {
-            "metadata": {
-              "id": "story-id",
-              "title": "Secrets of the Timeless Archive",
-              "description": "The story's greatest strengths...",
-              "author": "AI Story Weaver",
-              "genre": "Fantasy",
-              "tags": ["fantasy", "adventure"],
-              "originLanguage": "en",
-              "supportedLanguages": ["en"],
-              "totalChapters": 8,
-              "readingTime": 45,
-              "thumbnailUrl": "full_url",
-              "coverImageUrl": "full_url",
-              "status": "published",
-              "contentStats": {
-                "totalBlocks": 355,
-                "totalChapters": 8,
-                "imageCount": 16,
-                "totalWords": 8500,
-                "averageImagesPerChapter": 2.0,
-                "averageChapterLength": 1063
-              }
-            },
-            "chapters": [
-            {
-              "id": "chapter_123",
-              "title": "Chapter Title",
-              "chapterNumber": 1,
-              "blocks": [                                   // ✅ New: Complete content blocks array
-                {
-                  "id": "block_456",
-                  "type": "paragraph",
-                  "order": 1,
-                  "content": {
-                    "text": "Story content..."
-                  }
-                },
-                {
-                  "id": "block_789", 
-                  "type": "image",
-                  "order": 2,
-                  "content": {
-                    "url": "/api/content/story-id/image/en/chapter1_img01.webp",
-                    "description": "Scene illustration"
-                  }
-                },
-                {
-                  "id": "block_012",
-                  "type": "audio", 
-                  "order": 3,
-                  "content": {
-                    "url": "/api/content/story-id/audio/en/chapter1_narration.mp3",
-                    "duration": 655.091
-                  }
-                }
-              ],
-              "duration": 655.091,
-              "wordCount": 1200,
-              "readingTime": 6
-            }
-          ],
-          "assets": {
-            "images": {
-              "chapter1_img01": {
-                "url": "/api/content/story-id/image/en/chapter1_img01.webp",
-                "type": "image",
-                "description": "Chapter 1 scene illustration"
-              }
-            },
-            "audio": {
-              "chapter1_narration": {
-                "url": "/api/content/story-id/audio/en/chapter1_narration.mp3", 
-                "type": "audio",
-                "duration": 655.091
-              }
-            }
-          }
-        }
+          "id": "story-id",
+          "title": "Story Title",
+          "author": "AI Story Weaver",
+          "description": "Story description...",
+          "coverImage": "https://audiobook-dev.sunny250486.workers.dev/api/content/story-id/image/en/cover.jpg",
+          "thumbnail": "https://audiobook-dev.sunny250486.workers.dev/api/content/story-id/image/en/thumbnail.jpg", 
+          "originLanguage": "en",
+          "supportedLanguages": ["en"],
+          "totalChapters": 5,
+          "genre": "Fantasy",
+          "readingTime": 45,
+          "tags": ["fantasy", "adventure"],
+          "status": "published"
         }
         ```
+        
+        **Key Features:**
+        - Serves metadata.json directly from R2 storage
+        - No chapters array (use chapter endpoint for individual chapters)
+        - totalChapters field indicates number of chapters available
+        - Image URLs converted to full absolute URLs
       parameters:
         - name: storyId
           in: path
