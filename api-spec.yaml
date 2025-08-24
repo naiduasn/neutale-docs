@@ -311,7 +311,7 @@ paths:
         - Content
       summary: Get complete story metadata with content blocks
       description: |
-        **ENHANCED METADATA ENDPOINT** - Returns complete story metadata including all content blocks, assets, and chapter data.
+        **ENHANCED METADATA ENDPOINT** - Returns complete story metadata with all content blocks, assets, and chapter data.
         
         This endpoint has been upgraded to support the new unified content architecture:
         - **Complete Content Blocks**: All text, image, audio, and heading blocks with proper ordering
@@ -319,13 +319,34 @@ paths:
         - **Unified Structure**: Single source of truth for all story content
         - **Backward Compatibility**: Graceful fallback to legacy data when complete metadata unavailable
         
-        **New Response Format**:
+        **Response Format**:
         ```json
         {
-          "id": "story-id",
-          "title": "Secrets of the Timeless Archive",     // ✅ Fixed: Uses metadata.title
-          "description": "The story's greatest strengths...", // ✅ Fixed: Uses metadata.description  
-          "chapters": [
+          "story": {
+            "metadata": {
+              "id": "story-id",
+              "title": "Secrets of the Timeless Archive",
+              "description": "The story's greatest strengths...",
+              "author": "AI Story Weaver",
+              "genre": "Fantasy",
+              "tags": ["fantasy", "adventure"],
+              "originLanguage": "en",
+              "supportedLanguages": ["en"],
+              "totalChapters": 8,
+              "readingTime": 45,
+              "thumbnailUrl": "full_url",
+              "coverImageUrl": "full_url",
+              "status": "published",
+              "contentStats": {
+                "totalBlocks": 355,
+                "totalChapters": 8,
+                "imageCount": 16,
+                "totalWords": 8500,
+                "averageImagesPerChapter": 2.0,
+                "averageChapterLength": 1063
+              }
+            },
+            "chapters": [
             {
               "id": "chapter_123",
               "title": "Chapter Title",
@@ -358,25 +379,28 @@ paths:
                   }
                 }
               ],
-              "duration": 655.091,                         // ✅ New: Chapter audio duration
-              "audioUrl": "/api/content/.../chapter1_narration.mp3"  // ✅ New: Chapter audio URL
+              "duration": 655.091,
+              "wordCount": 1200,
+              "readingTime": 6
             }
           ],
-          "contentStats": {
-            "totalBlocks": 355,                             // ✅ Fixed: Shows backend has complete data
-            "totalChapters": 8,
-            "totalImages": 16,
-            "hasAudio": true,
-            "hasImages": true
-          },
           "assets": {
             "images": {
               "chapter1_img01": {
                 "url": "/api/content/story-id/image/en/chapter1_img01.webp",
+                "type": "image",
                 "description": "Chapter 1 scene illustration"
+              }
+            },
+            "audio": {
+              "chapter1_narration": {
+                "url": "/api/content/story-id/audio/en/chapter1_narration.mp3", 
+                "type": "audio",
+                "duration": 655.091
               }
             }
           }
+        }
         }
         ```
       parameters:
@@ -398,7 +422,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompleteStoryMetadata'
+                $ref: '#/components/schemas/EnhancedStoryMetadata'
         '404':
           description: Metadata not found
 
