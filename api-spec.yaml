@@ -1534,23 +1534,82 @@ paths:
       tags:
         - Search
       summary: Search stories and content
-      description: Search across stories, authors, and content with autocomplete
+      description: Search across stories, authors, and content with pagination
       parameters:
         - name: q
           in: query
           required: true
           schema:
             type: string
-          description: Search query
+          description: Search query (minimum 2 characters)
+        - name: language
+          in: query
+          schema:
+            type: string
+          description: Language filter for search results
         - name: limit
           in: query
           schema:
             type: integer
-            default: 10
-          description: Maximum number of results
+            default: 20
+            maximum: 50
+          description: Maximum number of results per page
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of results to skip for pagination
       responses:
         '200':
-          description: Search results
+          description: Search results with pagination
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  stories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Story'
+                  total:
+                    type: integer
+                    description: Total number of matching results
+                  query:
+                    type: string
+                    description: The search query used
+                  limit:
+                    type: integer
+                    description: Results limit used
+                  offset:
+                    type: integer
+                    description: Results offset used
+
+  /api/search/suggestions:
+    get:
+      tags:
+        - Search
+      summary: Get search suggestions
+      description: Get autocomplete suggestions for search queries
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query (minimum 2 characters)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+            maximum: 10
+          description: Maximum number of suggestions
+      responses:
+        '200':
+          description: Search suggestions
           content:
             application/json:
               schema:
@@ -1565,9 +1624,14 @@ paths:
                       properties:
                         text:
                           type: string
+                          description: The suggestion text
+                        id:
+                          type: string
+                          description: ID for story suggestions
                         type:
                           type: string
                           enum: [story, author, genre]
+                          description: Type of suggestion
 
   # Random Story Suggestion
   /api/surprise-me:
@@ -1575,10 +1639,28 @@ paths:
       tags:
         - Discovery
       summary: Get random story suggestion
-      description: Returns a random story recommendation for discovery
+      description: Returns a random story recommendation based on user reading history
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: User ID for personalized recommendations
+        - name: language
+          in: query
+          schema:
+            type: string
+            default: en
+          description: Preferred language for story suggestions
+        - name: genre
+          in: query
+          schema:
+            type: string
+          description: Optional genre filter for suggestions
       responses:
         '200':
-          description: Random story suggestion
+          description: Random story suggestion with personalization details
           content:
             application/json:
               schema:
@@ -1586,8 +1668,100 @@ paths:
                 properties:
                   success:
                     type: boolean
-                  story:
-                    $ref: '#/components/schemas/Story'
+                  message:
+                    type: string
+                    description: Descriptive message about the suggestion
+                  suggestion:
+                    allOf:
+                      - $ref: '#/components/schemas/Story'
+                      - type: object
+                        properties:
+                          isReread:
+                            type: boolean
+                            description: Whether this story was previously read
+                          reason:
+                            type: string
+                            enum: [unread_match, fallback_random]
+                            description: Reason for this suggestion
+        '400':
+          description: Bad request - missing userId parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/surprise-me/preferences:
+    get:
+      tags:
+        - Discovery
+      summary: Get personalized story suggestion
+      description: Returns a story recommendation based on user reading preferences and history
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: User ID for personalized recommendations
+        - name: language
+          in: query
+          schema:
+            type: string
+            default: en
+          description: Preferred language for story suggestions
+      responses:
+        '200':
+          description: Personalized story suggestion with user preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    description: Descriptive message about the suggestion
+                  suggestion:
+                    allOf:
+                      - $ref: '#/components/schemas/Story'
+                      - type: object
+                        properties:
+                          isReread:
+                            type: boolean
+                            description: Whether this story was previously read
+                          reason:
+                            type: string
+                            enum: [preference_match, unread_fallback]
+                            description: Reason for this suggestion
+                          matchedPreferences:
+                            type: array
+                            items:
+                              type: string
+                            description: User preferences that matched this suggestion
+                  userPreferences:
+                    type: object
+                    properties:
+                      preferredGenres:
+                        type: array
+                        items:
+                          type: string
+                        description: User's preferred genres based on reading history
+                      language:
+                        type: string
+                        description: Preferred language setting
+        '400':
+          description: Bad request - missing userId parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No unread stories found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # Database Migration Tools
   /api/migrate:
