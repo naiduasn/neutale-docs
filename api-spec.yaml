@@ -2552,6 +2552,184 @@ paths:
                   eventId:
                     type: string
 
+  # Reviews Endpoints
+  /api/reviews:
+    post:
+      tags:
+        - Reviews
+      summary: Submit a book review
+      description: |
+        Submit a review for a book with separate ratings for content and audio quality.
+        User must have read at least 50% of the book and can only review each book once.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitReviewRequest'
+      responses:
+        '201':
+          description: Review submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Review submitted successfully"
+                  reviewId:
+                    type: string
+                    example: "123e4567-e89b-12d3-a456-426614174000"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Not eligible to review (insufficient progress or already reviewed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Must complete at least 50% of the story to review"
+        '404':
+          description: Story not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Story not found"
+
+  /api/reviews/story/{storyId}:
+    get:
+      tags:
+        - Reviews
+      summary: Get reviews for a story
+      description: Retrieve paginated reviews for a specific story
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The story ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Number of reviews per page
+      responses:
+        '200':
+          description: Reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewsResponse'
+
+  /api/reviews/story/{storyId}/ratings:
+    get:
+      tags:
+        - Reviews
+      summary: Get aggregated ratings for a story
+      description: Get average ratings and distribution for content and audio quality
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The story ID
+      responses:
+        '200':
+          description: Ratings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryRatingsResponse'
+        '404':
+          description: Story not found
+
+  /api/reviews/eligibility/{storyId}:
+    get:
+      tags:
+        - Reviews
+      summary: Check review eligibility
+      description: Check if current user is eligible to review a specific story
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The story ID
+      responses:
+        '200':
+          description: Eligibility check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewEligibilityResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Story not found
+
+  /api/reviews/user/{userId}:
+    get:
+      tags:
+        - Reviews
+      summary: Get reviews by user
+      description: Retrieve paginated reviews submitted by a specific user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The user ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+          description: Number of reviews per page
+      responses:
+        '200':
+          description: User reviews retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserReviewsResponse'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -4587,6 +4765,200 @@ components:
                 description: Validation error message
           description: Detailed validation errors
 
+    # Reviews Schemas
+    SubmitReviewRequest:
+      type: object
+      required:
+        - storyId
+        - contentRating
+      properties:
+        storyId:
+          type: string
+          description: The story ID to review
+          example: "story-123"
+        contentRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Rating for content quality (story, plot, characters)
+          example: 4
+        audioRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Optional rating for audio quality (narration, sound effects)
+          example: 5
+        comment:
+          type: string
+          maxLength: 1000
+          description: Optional review comment (max 1000 characters)
+          example: "Great story with excellent narration!"
+
+    ReviewsResponse:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/Review'
+        total:
+          type: integer
+          description: Total number of reviews
+          example: 45
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        limit:
+          type: integer
+          description: Number of reviews per page
+          example: 10
+        hasMore:
+          type: boolean
+          description: Whether there are more reviews available
+          example: true
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Review ID
+          example: "review-123"
+        userName:
+          type: string
+          description: Display name of the reviewer
+          example: "Sarah"
+        contentRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Content quality rating
+          example: 4
+        audioRating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          nullable: true
+          description: Audio quality rating (null if not provided)
+          example: 5
+        comment:
+          type: string
+          nullable: true
+          description: Review comment (null if not provided)
+          example: "Great story with excellent narration!"
+        createdAt:
+          type: string
+          format: date-time
+          description: When the review was created
+          example: "2025-08-28T10:30:00Z"
+
+    StoryRatingsResponse:
+      type: object
+      properties:
+        avgContent:
+          type: number
+          format: float
+          description: Average content rating
+          example: 4.2
+        avgAudio:
+          type: number
+          format: float
+          description: Average audio rating
+          example: 4.5
+        count:
+          type: integer
+          description: Total number of reviews
+          example: 45
+        distribution:
+          type: object
+          properties:
+            content:
+              type: array
+              items:
+                type: object
+                properties:
+                  content_rating:
+                    type: integer
+                    example: 5
+                  count:
+                    type: integer
+                    example: 25
+              description: Content rating distribution
+            audio:
+              type: array
+              items:
+                type: object
+                properties:
+                  audio_rating:
+                    type: integer
+                    example: 5
+                  count:
+                    type: integer
+                    example: 20
+              description: Audio rating distribution
+
+    ReviewEligibilityResponse:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+          description: Whether user is eligible to review
+          example: true
+        reason:
+          type: string
+          nullable: true
+          description: Reason if not eligible
+          example: "Must complete at least 50% of the story to review"
+
+    UserReviewsResponse:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Review ID
+              contentRating:
+                type: integer
+                minimum: 1
+                maximum: 5
+              audioRating:
+                type: integer
+                minimum: 1
+                maximum: 5
+                nullable: true
+              comment:
+                type: string
+                nullable: true
+              createdAt:
+                type: string
+                format: date-time
+              story_id:
+                type: string
+                description: ID of the reviewed story
+              story_title:
+                type: string
+                description: Title of the reviewed story
+              story_author:
+                type: string
+                description: Author of the reviewed story
+        total:
+          type: integer
+          description: Total number of reviews by user
+        page:
+          type: integer
+          description: Current page number
+        limit:
+          type: integer
+          description: Number of reviews per page
+        hasMore:
+          type: boolean
+          description: Whether there are more reviews available
+
 tags:
   - name: Health
     description: API health check endpoints
@@ -4598,6 +4970,8 @@ tags:
     description: Content delivery (text, audio, images)
   - name: Feedback
     description: User feedback and ratings
+  - name: Reviews
+    description: Book review system with separate content and audio ratings
   - name: Progressive Upload
     description: Progressive story upload system for handling large stories with multiple assets
   - name: User
