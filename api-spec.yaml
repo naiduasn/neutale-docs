@@ -571,6 +571,242 @@ paths:
                     type: string
                     example: "stories/story-id/en/assets/images/missing-file.jpg"
 
+  # Multi-language Content Endpoints
+  /api/multilang/{storyId}/{language}/content:
+    get:
+      tags:
+        - Multi-language Content
+      summary: Get localized story content
+      description: |
+        **MULTILANGUAGE CONTENT ENDPOINT** - Returns complete localized story content
+        
+        Returns the full story content in the specified language with:
+        - Localized metadata (title, description, author notes)
+        - All chapters with translated content
+        - Asset URLs with language-specific paths and fallbacks
+        - Translation quality metrics and status
+        
+        **Fallback Strategy:**
+        - If translation doesn't exist, returns 404
+        - Assets fall back to master language if localized version missing
+        - Quality score indicates translation completeness
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique story identifier
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z]{2}$
+          description: Target language code (ISO 639-1, e.g., 'es', 'fr', 'de')
+      responses:
+        '200':
+          description: Localized story content retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocalizedStoryContent'
+        '404':
+          description: Translation not found for specified language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid language code format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/multilang/{storyId}/languages:
+    get:
+      tags:
+        - Multi-language Content
+      summary: Get available languages for a story
+      description: |
+        Returns all available languages for a story, including:
+        - Master/origin language
+        - Available translations with quality scores
+        - Translation status and completion metrics
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique story identifier
+      responses:
+        '200':
+          description: Available languages retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storyId:
+                    type: string
+                    description: Story identifier
+                  originLanguage:
+                    type: string
+                    description: Master/origin language code
+                  supportedLanguages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LanguageInfo'
+                    description: List of supported languages with metadata
+        '404':
+          description: Story not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/multilang-import/upload:
+    post:
+      tags:
+        - Multi-language Import
+      summary: Import multilanguage story content
+      description: |
+        **MULTILANGUAGE IMPORT ENDPOINT** - Import complete multilanguage stories
+        
+        Supports importing:
+        - Master story with all languages in one payload
+        - Individual translation uploads
+        - Progressive translation (partial content)
+        - Asset localization with fallback support
+        
+        **Authentication Required**: StoryGen API key authentication
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MultiLanguageImportRequest'
+      responses:
+        '201':
+          description: Multilanguage story imported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  storyId:
+                    type: string
+                    description: Imported story identifier
+                  languagesImported:
+                    type: array
+                    items:
+                      type: string
+                    description: List of language codes imported
+                  validationResults:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/TranslationValidation'
+                    description: Validation results for each language
+        '400':
+          description: Invalid import data or validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: Error description
+                  validationErrors:
+                    type: array
+                    items:
+                      type: string
+                    description: List of validation errors
+        '401':
+          description: Invalid or missing StoryGen API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/multilang-import/progressive:
+    post:
+      tags:
+        - Multi-language Import
+      summary: Progressive translation upload
+      description: |
+        **PROGRESSIVE TRANSLATION ENDPOINT** - Upload partial translations progressively
+        
+        Allows uploading incomplete translations that can be completed over time:
+        - Upload specific chapters in target language
+        - Update existing translations
+        - Add new languages to existing stories
+        - Track translation progress and quality
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                storyId:
+                  type: string
+                  description: Existing story identifier
+                language:
+                  type: string
+                  pattern: ^[a-z]{2}$
+                  description: Target language code
+                chapters:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ChapterTranslation'
+                  description: Chapters to update/add
+                metadata:
+                  type: object
+                  description: Translated story metadata (title, description, etc.)
+                assets:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: Localized asset mappings
+      responses:
+        '200':
+          description: Progressive translation updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  chaptersUpdated:
+                    type: integer
+                    description: Number of chapters updated
+                  translationQuality:
+                    $ref: '#/components/schemas/TranslationValidation'
+        '404':
+          description: Story not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid translation data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # Feedback Endpoints
   /api/stories/{id}/feedback:
     post:
@@ -4959,6 +5195,202 @@ components:
           type: boolean
           description: Whether there are more reviews available
 
+    # Multi-language Schema Definitions
+    LocalizedStoryContent:
+      type: object
+      description: Complete localized story content with metadata and chapters
+      properties:
+        storyId:
+          type: string
+          description: Unique story identifier
+        language:
+          type: string
+          pattern: ^[a-z]{2}$
+          description: Target language code (ISO 639-1)
+        title:
+          type: string
+          description: Localized story title
+        author:
+          type: string
+          description: Localized author name
+        description:
+          type: string
+          description: Localized story description
+        metadata:
+          type: object
+          description: Complete translated metadata
+          additionalProperties: true
+        chapters:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalizedChapter'
+          description: All story chapters with translated content
+        assets:
+          type: object
+          description: Asset URLs with language-specific paths and fallbacks
+          additionalProperties:
+            type: string
+        translationQuality:
+          $ref: '#/components/schemas/TranslationValidation'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LocalizedChapter:
+      type: object
+      description: Single chapter with localized content
+      properties:
+        id:
+          type: string
+          description: Chapter identifier
+        title:
+          type: string
+          description: Localized chapter title
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentBlock'
+          description: Chapter content blocks with translations
+
+    LanguageInfo:
+      type: object
+      description: Language availability and quality information
+      properties:
+        language:
+          type: string
+          pattern: ^[a-z]{2}$
+          description: Language code (ISO 639-1)
+        languageName:
+          type: string
+          description: Human-readable language name
+        isOrigin:
+          type: boolean
+          description: Whether this is the master/origin language
+        translationQuality:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Translation quality score (0-100)
+        completeness:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Translation completeness ratio (0-1)
+        lastUpdated:
+          type: string
+          format: date-time
+          description: Last translation update timestamp
+
+    MultiLanguageImportRequest:
+      type: object
+      description: Request for importing multilanguage story content
+      required:
+        - masterLanguage
+        - storyData
+      properties:
+        masterLanguage:
+          type: string
+          pattern: ^[a-z]{2}$
+          description: Master/origin language code
+        storyData:
+          type: object
+          description: Story data in master language
+          additionalProperties: true
+        translations:
+          type: object
+          description: Translation data keyed by language code
+          additionalProperties:
+            type: object
+            description: Translated story content
+            additionalProperties: true
+        assets:
+          type: object
+          description: Asset localization mappings
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+        metadata:
+          type: object
+          description: Import metadata and options
+          properties:
+            importSource:
+              type: string
+              description: Source system or service
+            validateTranslations:
+              type: boolean
+              default: true
+              description: Whether to validate translation quality
+            overwriteExisting:
+              type: boolean
+              default: false
+              description: Whether to overwrite existing translations
+
+    ChapterTranslation:
+      type: object
+      description: Single chapter translation for progressive updates
+      properties:
+        id:
+          type: string
+          description: Chapter identifier
+        title:
+          type: string
+          description: Translated chapter title
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentBlock'
+          description: Translated content blocks
+
+    TranslationValidation:
+      type: object
+      description: Translation quality assessment and validation results
+      properties:
+        valid:
+          type: boolean
+          description: Whether translation passes validation
+        qualityScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Overall quality score (0-100)
+        errors:
+          type: array
+          items:
+            type: string
+          description: List of validation errors
+        warnings:
+          type: array
+          items:
+            type: string
+          description: List of validation warnings
+        metrics:
+          type: object
+          description: Detailed quality metrics
+          properties:
+            completeness:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Translation completeness ratio
+            wordVariance:
+              type: number
+              minimum: 0
+              description: Word count variance from original
+            structuralIntegrity:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Structural integrity score
+            culturalAdaptation:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Cultural adaptation score
+
 tags:
   - name: Health
     description: API health check endpoints
@@ -4968,6 +5400,10 @@ tags:
     description: Story management and discovery
   - name: Content
     description: Content delivery (text, audio, images)
+  - name: Multi-language Content
+    description: Localized content delivery and language management
+  - name: Multi-language Import
+    description: Import and manage multilanguage story translations
   - name: Feedback
     description: User feedback and ratings
   - name: Reviews
