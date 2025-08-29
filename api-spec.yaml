@@ -714,6 +714,151 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  # Language-Explicit Content Endpoints (Direct Language Specification)
+  /api/content/{storyId}/image/{language}/{filename}:
+    get:
+      tags:
+        - Content
+      summary: Serve images with explicit language specification
+      description: |
+        **LANGUAGE-EXPLICIT IMAGE ENDPOINT** - Direct language specification
+        
+        **Features:**
+        - Explicit language parameter in URL path
+        - Fallback to master language (en) if specified language not available
+        - Returns Content-Language and X-Fallback-Used headers
+        - Optimized for CDN caching with language-specific URLs
+        
+        **Path Structure:**
+        - Target: `stories/{storyId}/{language}/assets/images/{filename}`
+        - Fallback: `stories/{storyId}/en/assets/images/{filename}` (master)
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique story identifier
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z]{2,3}$
+          description: Language code (ISO 639-1/639-2)
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Image filename (e.g., cover.jpg, chapter1.png)
+      responses:
+        '200':
+          description: Image served successfully
+          headers:
+            Content-Language:
+              description: Language of served content
+              schema:
+                type: string
+            X-Fallback-Used:
+              description: Whether fallback to master language occurred
+              schema:
+                type: string
+                enum: ["true", "false"]
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found in specified or master language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/content/{storyId}/audio/{language}/{filename}:
+    get:
+      tags:
+        - Content
+      summary: Serve audio with explicit language specification
+      description: |
+        **LANGUAGE-EXPLICIT AUDIO ENDPOINT** - Direct language specification
+        
+        **Features:**
+        - Explicit language parameter in URL path
+        - Fallback to master language (en) if specified language not available
+        - Returns Content-Language and X-Fallback-Used headers
+        - Optimized for CDN caching and mobile app deep linking
+        
+        **Path Structure:**
+        - Target: `stories/{storyId}/{language}/assets/audios/{filename}`
+        - Fallback: `stories/{storyId}/en/assets/audios/{filename}` (master)
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique story identifier
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z]{2,3}$
+          description: Language code (ISO 639-1/639-2)
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Audio filename (e.g., chapter1.mp3, narration.wav)
+      responses:
+        '200':
+          description: Audio served successfully
+          headers:
+            Content-Language:
+              description: Language of served content
+              schema:
+                type: string
+            X-Fallback-Used:
+              description: Whether fallback to master language occurred
+              schema:
+                type: string
+                enum: ["true", "false"]
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Audio file not found in specified or master language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   # StoryGen Import with Multilanguage Support
   /api/import/storygen/multilang:
     post:
