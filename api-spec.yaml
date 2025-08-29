@@ -571,25 +571,24 @@ paths:
                     type: string
                     example: "stories/story-id/en/assets/images/missing-file.jpg"
 
-  # Multi-language Content Endpoints
-  /api/multilang/{storyId}/{language}/content:
+  # Enhanced Content Endpoints with Accept-Language Support
+  /api/content/{storyId}/image/{filename}:
     get:
       tags:
-        - Multi-language Content
-      summary: Get localized story content
+        - Content
+      summary: Serve images with automatic language fallback
       description: |
-        **MULTILANGUAGE CONTENT ENDPOINT** - Returns complete localized story content
+        **ENHANCED IMAGE ENDPOINT** - Serves images with intelligent language fallback
         
-        Returns the full story content in the specified language with:
-        - Localized metadata (title, description, author notes)
-        - All chapters with translated content
-        - Asset URLs with language-specific paths and fallbacks
-        - Translation quality metrics and status
+        **Language Detection:**
+        - Uses `Accept-Language` header to determine preferred language
+        - Falls back to master language if localized version not found
+        - Returns `Content-Language` header indicating served language
+        - Includes `X-Fallback-Used` header if fallback occurred
         
-        **Fallback Strategy:**
-        - If translation doesn't exist, returns 404
-        - Assets fall back to master language if localized version missing
-        - Quality score indicates translation completeness
+        **Path Structure:**
+        - Target: `stories/{storyId}/{language}/assets/images/{filename}`
+        - Fallback: `stories/{storyId}/en/assets/images/{filename}` (master)
       parameters:
         - name: storyId
           in: path
@@ -597,43 +596,66 @@ paths:
           schema:
             type: string
           description: Unique story identifier
-        - name: language
+        - name: filename
           in: path
           required: true
           schema:
             type: string
-            pattern: ^[a-z]{2}$
-          description: Target language code (ISO 639-1, e.g., 'es', 'fr', 'de')
+          description: Image filename (e.g., cover.jpg, thumbnail.png)
+        - name: Accept-Language
+          in: header
+          schema:
+            type: string
+          description: |
+            Language preference (RFC 7231 format)
+            Example: "es,en;q=0.9" prefers Spanish, fallback to English
       responses:
         '200':
-          description: Localized story content retrieved successfully
-          content:
-            application/json:
+          description: Image served successfully
+          headers:
+            Content-Language:
+              description: Language of served content
               schema:
-                $ref: '#/components/schemas/LocalizedStoryContent'
+                type: string
+            X-Fallback-Used:
+              description: Whether fallback to master language occurred
+              schema:
+                type: string
+                enum: ["true", "false"]
+            Vary:
+              description: Indicates response varies by Accept-Language
+              schema:
+                type: string
+                example: "Accept-Language"
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
         '404':
-          description: Translation not found for specified language
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Invalid language code format
+          description: Image not found in any language
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/multilang/{storyId}/languages:
+  /api/content/{storyId}/audio/{filename}:
     get:
       tags:
-        - Multi-language Content
-      summary: Get available languages for a story
+        - Content
+      summary: Serve audio with automatic language fallback
       description: |
-        Returns all available languages for a story, including:
-        - Master/origin language
-        - Available translations with quality scores
-        - Translation status and completion metrics
+        **ENHANCED AUDIO ENDPOINT** - Serves audio files with intelligent language fallback
+        
+        **Language Detection:**
+        - Uses `Accept-Language` header to determine preferred language
+        - Falls back to master language if localized version not found
+        - Returns `Content-Language` header indicating served language
+        - Includes `X-Fallback-Used` header if fallback occurred
       parameters:
         - name: storyId
           in: path
@@ -641,47 +663,67 @@ paths:
           schema:
             type: string
           description: Unique story identifier
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Audio filename (e.g., chapter1.mp3, narration.wav)
+        - name: Accept-Language
+          in: header
+          schema:
+            type: string
+          description: Language preference (RFC 7231 format)
       responses:
         '200':
-          description: Available languages retrieved successfully
-          content:
-            application/json:
+          description: Audio served successfully
+          headers:
+            Content-Language:
+              description: Language of served content
               schema:
-                type: object
-                properties:
-                  storyId:
-                    type: string
-                    description: Story identifier
-                  originLanguage:
-                    type: string
-                    description: Master/origin language code
-                  supportedLanguages:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LanguageInfo'
-                    description: List of supported languages with metadata
+                type: string
+            X-Fallback-Used:
+              description: Whether fallback to master language occurred
+              schema:
+                type: string
+                enum: ["true", "false"]
+            Vary:
+              description: Indicates response varies by Accept-Language
+              schema:
+                type: string
+                example: "Accept-Language"
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
         '404':
-          description: Story not found
+          description: Audio file not found in any language
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/multilang-import/upload:
+  # StoryGen Import with Multilanguage Support
+  /api/import/storygen/multilang:
     post:
       tags:
-        - Multi-language Import
-      summary: Import multilanguage story content
+        - Import
+      summary: Import multilanguage story from StoryGen
       description: |
-        **MULTILANGUAGE IMPORT ENDPOINT** - Import complete multilanguage stories
+        **MULTILANGUAGE STORYGEN IMPORT** - Import complete multilanguage stories
         
-        Supports importing:
-        - Master story with all languages in one payload
-        - Individual translation uploads
-        - Progressive translation (partial content)
-        - Asset localization with fallback support
+        **Features:**
+        - Master story import with multiple translations
+        - Automatic translation quality validation
+        - Asset localization support
+        - Database optimization for multilanguage queries
         
-        **Authentication Required**: StoryGen API key authentication
+        **Authentication Required**: StoryGen API key or development mode
       security:
         - ApiKeyAuth: []
       requestBody:
@@ -689,7 +731,47 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MultiLanguageImportRequest'
+              type: object
+              required:
+                - masterLanguage
+                - storyData
+              properties:
+                masterLanguage:
+                  type: string
+                  pattern: ^[a-z]{2}$
+                  description: Master/origin language code (ISO 639-1)
+                storyData:
+                  $ref: '#/components/schemas/StorygenData'
+                  description: Complete story data in master language
+                translations:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      author:
+                        type: string
+                      description:
+                        type: string
+                      chapters:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            title:
+                              type: string
+                            blocks:
+                              type: array
+                              items:
+                                type: object
+                  description: Translations keyed by language code
+                validateTranslations:
+                  type: boolean
+                  default: true
+                  description: Whether to validate translation quality
       responses:
         '201':
           description: Multilanguage story imported successfully
@@ -715,93 +797,13 @@ paths:
                       $ref: '#/components/schemas/TranslationValidation'
                     description: Validation results for each language
         '400':
-          description: Invalid import data or validation failed
+          description: Invalid import data
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    description: Error description
-                  validationErrors:
-                    type: array
-                    items:
-                      type: string
-                    description: List of validation errors
+                $ref: '#/components/schemas/Error'
         '401':
-          description: Invalid or missing StoryGen API key
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/multilang-import/progressive:
-    post:
-      tags:
-        - Multi-language Import
-      summary: Progressive translation upload
-      description: |
-        **PROGRESSIVE TRANSLATION ENDPOINT** - Upload partial translations progressively
-        
-        Allows uploading incomplete translations that can be completed over time:
-        - Upload specific chapters in target language
-        - Update existing translations
-        - Add new languages to existing stories
-        - Track translation progress and quality
-      security:
-        - ApiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                storyId:
-                  type: string
-                  description: Existing story identifier
-                language:
-                  type: string
-                  pattern: ^[a-z]{2}$
-                  description: Target language code
-                chapters:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/ChapterTranslation'
-                  description: Chapters to update/add
-                metadata:
-                  type: object
-                  description: Translated story metadata (title, description, etc.)
-                assets:
-                  type: object
-                  additionalProperties:
-                    type: string
-                  description: Localized asset mappings
-      responses:
-        '200':
-          description: Progressive translation updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  chaptersUpdated:
-                    type: integer
-                    description: Number of chapters updated
-                  translationQuality:
-                    $ref: '#/components/schemas/TranslationValidation'
-        '404':
-          description: Story not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Invalid translation data
+          description: Authentication required
           content:
             application/json:
               schema:
@@ -5399,11 +5401,9 @@ tags:
   - name: Stories
     description: Story management and discovery
   - name: Content
-    description: Content delivery (text, audio, images)
-  - name: Multi-language Content
-    description: Localized content delivery and language management
-  - name: Multi-language Import
-    description: Import and manage multilanguage story translations
+    description: Content delivery with automatic language fallback (text, audio, images)
+  - name: Import
+    description: Story import system with multilanguage support
   - name: Feedback
     description: User feedback and ratings
   - name: Reviews
