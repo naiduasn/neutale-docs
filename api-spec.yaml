@@ -186,13 +186,19 @@ paths:
           schema:
             type: string
             enum: [published, draft, archived, all]
-            default: published
+            default: "published"
           description: Filter by story status
         - name: tags
           in: query
           schema:
             type: string
           description: Comma-separated list of tags to filter by
+        - name: translation_status
+          in: query
+          schema:
+            type: string
+            enum: [master, translated, in_progress, needs_review]
+          description: Filter by translation status for multilanguage support
       responses:
         '200':
           description: List of stories
@@ -255,7 +261,7 @@ paths:
           in: query
           schema:
             type: string
-            default: en
+            default: "en"
           description: Language code for localized content
       responses:
         '200':
@@ -798,6 +804,175 @@ paths:
                     description: Validation results for each language
         '400':
           description: Invalid import data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # Progressive Translation Endpoints
+  /api/import/storygen/{storyId}/translate/{language}/chapter/{chapterId}:
+    post:
+      tags:
+        - Import
+      summary: Upload partial chapter translation
+      description: |
+        **PROGRESSIVE TRANSLATION ENDPOINT** - Upload or update individual chapter translations
+        
+        **Features:**
+        - Upload specific chapters in target language
+        - Update existing translations incrementally
+        - Track translation progress and quality
+        - Support for incomplete translations that can be completed over time
+        
+        **Authentication Required**: StoryGen API key or development mode
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Existing story identifier
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z]{2}$
+          description: Target language code (ISO 639-1)
+        - name: chapterId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Chapter identifier to translate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChapterTranslation'
+      responses:
+        '200':
+          description: Chapter translation uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  chapterId:
+                    type: string
+                    description: Updated chapter identifier
+                  translationQuality:
+                    $ref: '#/components/schemas/TranslationValidation'
+                  syncVersion:
+                    type: string
+                    description: Version identifier for sync tracking
+                  contentHash:
+                    type: string
+                    description: Hash of translated content for integrity
+        '404':
+          description: Story or chapter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid translation data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/import/storygen/{storyId}/translate/{language}/status:
+    get:
+      tags:
+        - Import
+      summary: Get translation progress status
+      description: |
+        **TRANSLATION STATUS ENDPOINT** - Get current translation progress and quality metrics
+        
+        Returns detailed information about translation completion, quality scores,
+        and chapter-by-chapter progress for the specified language.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Story identifier
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[a-z]{2}$
+          description: Target language code
+      responses:
+        '200':
+          description: Translation status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storyId:
+                    type: string
+                  language:
+                    type: string
+                  translationStatus:
+                    type: string
+                    enum: [not_started, in_progress, completed, needs_review]
+                  overallQuality:
+                    type: number
+                    minimum: 0
+                    maximum: 100
+                    description: Overall translation quality score
+                  completeness:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+                    description: Translation completeness ratio
+                  chapters:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        chapterId:
+                          type: string
+                        status:
+                          type: string
+                          enum: [not_started, in_progress, completed, needs_review]
+                        qualityScore:
+                          type: number
+                        lastUpdated:
+                          type: string
+                          format: date-time
+                        syncVersion:
+                          type: string
+                  lastUpdated:
+                    type: string
+                    format: date-time
+        '404':
+          description: Story or translation not found
           content:
             application/json:
               schema:
@@ -1694,7 +1869,7 @@ paths:
           required: false
           schema:
             type: string
-            default: en
+            default: "en"
           description: FAQ language (default: en)
       responses:
         '200':
@@ -1889,7 +2064,7 @@ paths:
           in: query
           schema:
             type: string
-            default: en
+            default: "en"
           description: Preferred language for story suggestions
         - name: genre
           in: query
@@ -1945,7 +2120,7 @@ paths:
           in: query
           schema:
             type: string
-            default: en
+            default: "en"
           description: Preferred language for story suggestions
       responses:
         '200':
@@ -2396,400 +2571,6 @@ paths:
                           format: date-time
 
   # Billing Endpoints
-  /api/billing/plans:
-    get:
-      tags:
-        - Billing
-      summary: Get subscription plans
-      description: Retrieve available subscription plans with A/B testing and localization
-      parameters:
-        - name: country
-          in: query
-          description: Country code for localized pricing
-          schema:
-            type: string
-            example: US
-      responses:
-        '200':
-          description: Subscription plans retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: object
-                    properties:
-                      plans:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/SubscriptionPlan'
-                      currency:
-                        type: string
-                        example: USD
-                      country:
-                        type: string
-                        example: US
-                      abTestVariant:
-                        type: string
-                        example: control
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-
-  /api/billing/checkout-link:
-    post:
-      tags:
-        - Billing
-      summary: Create checkout session
-      description: Create a new checkout session for subscription payment
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - planId
-              properties:
-                planId:
-                  type: string
-                  example: neutale-monthly
-                successUrl:
-                  type: string
-                  example: neutale://billing/success
-                cancelUrl:
-                  type: string
-                  example: neutale://billing/cancel
-                metadata:
-                  type: object
-      responses:
-        '200':
-          description: Checkout session created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: object
-                    properties:
-                      sessionId:
-                        type: string
-                      checkoutUrl:
-                        type: string
-                      expiresAt:
-                        type: string
-                        format: date-time
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-
-  /api/billing/verify-payment:
-    post:
-      tags:
-        - Billing
-      summary: Verify payment completion
-      description: Verify that a payment has been completed successfully
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - sessionId
-              properties:
-                sessionId:
-                  type: string
-      responses:
-        '200':
-          description: Payment verified successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: object
-                    properties:
-                      subscriptionId:
-                        type: string
-                      status:
-                        type: string
-                        enum: [active, trial, past_due, canceled]
-                      currentPeriodStart:
-                        type: string
-                        format: date-time
-                      currentPeriodEnd:
-                        type: string
-                        format: date-time
-                      planId:
-                        type: string
-        '202':
-          description: Payment still pending
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '404':
-          description: Session not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-
-  /api/billing/subscription:
-    get:
-      tags:
-        - Billing
-      summary: Get subscription status
-      description: Get current subscription status and entitlement information
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Subscription status retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    $ref: '#/components/schemas/Entitlement'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-
-  /api/billing/subscription/cancel:
-    post:
-      tags:
-        - Billing
-      summary: Cancel subscription
-      description: Cancel the user's active subscription
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Subscription cancelled successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: object
-                    properties:
-                      subscriptionId:
-                        type: string
-                      cancelAtPeriodEnd:
-                        type: boolean
-                      currentPeriodEnd:
-                        type: string
-                        format: date-time
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '404':
-          description: No active subscription found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-
-  /api/billing/subscription/portal-link:
-    post:
-      tags:
-        - Billing
-      summary: Create billing portal link
-      description: Create a link to the customer billing portal
-      security:
-        - BearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                returnUrl:
-                  type: string
-                  example: neutale://billing/portal-return
-      responses:
-        '200':
-          description: Portal link created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: object
-                    properties:
-                      portalUrl:
-                        type: string
-                      expiresAt:
-                        type: string
-                        format: date-time
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BillingError'
-
-  /api/webhooks/dodo:
-    post:
-      tags:
-        - Webhooks
-      summary: Dodo Payments webhook
-      description: Webhook endpoint for receiving Dodo Payments events
-      parameters:
-        - name: dodo-signature
-          in: header
-          required: true
-          description: Webhook signature for verification
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                id:
-                  type: string
-                type:
-                  type: string
-                  enum:
-                    - subscription.created
-                    - subscription.updated
-                    - subscription.canceled
-                    - payment.succeeded
-                    - payment.failed
-                    - invoice.payment_action_required
-                data:
-                  type: object
-                created:
-                  type: integer
-                livemode:
-                  type: boolean
-      responses:
-        '200':
-          description: Webhook processed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  received:
-                    type: boolean
-        '400':
-          description: Invalid webhook payload
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        '401':
-          description: Invalid webhook signature
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-        '500':
-          description: Webhook processing failed
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                  eventId:
-                    type: string
-
   # Reviews Endpoints
   /api/reviews:
     post:
@@ -5234,6 +5015,16 @@ components:
             type: string
         translationQuality:
           $ref: '#/components/schemas/TranslationValidation'
+        syncVersion:
+          type: string
+          description: Version identifier for sync tracking and conflict resolution
+        contentHash:
+          type: string
+          description: Hash of content for integrity verification and change detection
+        translationStatus:
+          type: string
+          enum: [master, translated, in_progress, needs_review]
+          description: Current translation status
         createdAt:
           type: string
           format: date-time
@@ -5392,6 +5183,117 @@ components:
               minimum: 0
               maximum: 1
               description: Cultural adaptation score
+
+    StorygenData:
+      type: object
+      description: Complete story data structure from StoryGen import system
+      required:
+        - title
+        - chapters
+        - assets
+      properties:
+        title:
+          type: string
+          description: Story title
+        author:
+          type: string
+          description: Story author
+        description:
+          type: string
+          description: Story description
+        genre:
+          type: string
+          description: Story genre
+        tags:
+          type: array
+          items:
+            type: string
+          description: Story tags
+        chapters:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              chapterNumber:
+                type: number
+              blocks:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContentBlock'
+              duration:
+                type: number
+              audioUrl:
+                type: string
+          description: Story chapters with content blocks
+        assets:
+          type: object
+          properties:
+            images:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  filename:
+                    type: string
+                  description:
+                    type: string
+                  type:
+                    type: string
+                    enum: [cover, thumbnail, chapter, scene, character]
+            audio:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  filename:
+                    type: string
+                  duration:
+                    type: number
+          description: Story assets (images and audio files)
+        prompt:
+          type: string
+          description: Original generation prompt
+        length:
+          type: string
+          description: Target story length
+        outline:
+          type: string
+          description: Story outline
+        plot:
+          type: string
+          description: Plot summary
+        characters:
+          type: string
+          description: Character descriptions
+        story:
+          type: string
+          description: Full story text
+        review:
+          type: object
+          description: Story review and quality metrics
+        image_data:
+          type: object
+          description: Image generation metadata
+        folder_name:
+          type: string
+          description: Source folder name
+        timestamp:
+          type: string
+          description: Generation timestamp
+        final_rating:
+          type: number
+          description: Final quality rating
+        quality_achieved:
+          type: boolean
+          description: Whether quality threshold was met
 
 tags:
   - name: Health
