@@ -59,31 +59,25 @@ After analyzing the feedback and examining the audiobook backend's actual archit
 
 ---
 
-## 🗄️ Database Design (Modified Option 1)
+## 🗄️ Database Design (Unified Consistent Approach)
 
-### Extended Stories Table
+### Core Stories Table (Lightweight)
 ```sql
 -- Migration: 0015_add_translation_support.sql
+-- Remove complete_metadata blob - keep stories table lightweight
 ALTER TABLE stories 
-ADD COLUMN translations TEXT DEFAULT '{}';  -- JSON object with translation metadata
 ADD COLUMN translation_status TEXT DEFAULT 'master'; -- 'master', 'translation', 'variant'
-ADD COLUMN master_story_id TEXT;  -- NULL for masters, references parent for translations
 ADD COLUMN language_group_id TEXT;  -- Groups related translations
 ADD COLUMN translation_analytics TEXT DEFAULT '{}';  -- Per-language metrics
 
--- Create indexes for JSON fields (SQLite 3.38+ JSON operators)
-CREATE INDEX idx_translations_status 
-ON stories(json_extract(translations, '$.*.status'));
-
-CREATE INDEX idx_translations_languages 
-ON stories(json_extract(supported_languages, '$[*]'));
+-- Remove complete_metadata column (move to story_translations)
+-- This will be done via data migration script
 
 CREATE INDEX idx_language_group 
 ON stories(language_group_id) WHERE language_group_id IS NOT NULL;
 
--- Add foreign key reference
-CREATE INDEX idx_master_story 
-ON stories(master_story_id) WHERE master_story_id IS NOT NULL;
+CREATE INDEX idx_translation_status 
+ON stories(translation_status);
 ```
 
 ### Translation Metadata Structure
@@ -123,72 +117,101 @@ ON stories(master_story_id) WHERE master_story_id IS NOT NULL;
 }
 ```
 
-### Separate Translation Content Strategy
-To avoid 1MB row limit, store actual translated content separately:
-
+### Unified Content Storage (All Languages Including Master)
 ```sql
--- New table for translated content (prevents bloating main table)
+-- ALL content stored here (including master language)
 CREATE TABLE story_translations (
   id TEXT PRIMARY KEY,  -- {story_id}_{language}
   story_id TEXT NOT NULL,
   language TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
-  translated_metadata TEXT,  -- Full translated content (chapters, blocks)
+  translated_metadata TEXT,  -- Full story content (chapters, blocks)
+  translation_quality REAL DEFAULT 0.0, -- Quality score 0-100
+  word_count INTEGER DEFAULT 0,
+  chapter_count INTEGER DEFAULT 0,
+  has_audio BOOLEAN DEFAULT FALSE,
+  audio_status TEXT DEFAULT 'not_started', -- not_started, in_progress, completed
+  content_hash TEXT, -- For change detection
+  sync_version TEXT DEFAULT '1.0',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (story_id) REFERENCES stories(id),
+  FOREIGN KEY (story_id) REFERENCES stories(id) ON DELETE CASCADE,
   UNIQUE(story_id, language)
 );
 
+-- Performance indexes
 CREATE INDEX idx_story_translations_lookup 
 ON story_translations(story_id, language);
+
+CREATE INDEX idx_story_translations_status 
+ON story_translations(language, audio_status);
+
+CREATE INDEX idx_story_translations_quality 
+ON story_translations(language, translation_quality);
 ```
 
 ---
 
 ## 📁 R2 Storage Design (Pragmatic Shared Assets)
 
-### Directory Structure
+### Directory Structure (Shared Assets + Chapter Granularity)
 ```
 stories/
 └── {story-id}/
-    ├── master/
-    │   ├── metadata.json         # Language-agnostic core metadata
-    │   ├── language_manifest.json # Available translations tracker
-    │   └── assets/               # Shared visual assets
-    │       ├── cover.webp
-    │       ├── thumbnail.webp
-    │       └── scenes/
-    │           ├── scene_01.webp
-    │           └── scene_02.webp
-    ├── en/                       # English (original)
-    │   ├── content.json          # Full story content
-    │   ├── metadata.json         # Language-specific metadata
-    │   └── audio/
-    │       ├── chapter_01.mp3
-    │       └── manifest.json
+    ├── assets/                   # SHARED assets (reused across languages)
+    │   ├── cover.webp
+    │   ├── thumbnail.webp
+    │   └── scenes/
+    │       ├── scene_01.webp
+    │       └── scene_02.webp
+    ├── en/                       # English (master language)
+    │   ├── metadata.json         # Contains chapters array with contentUrl mappings
+    │   ├── chapters/             # Individual chapter files with generated names
+    │   │   ├── ch_abc123.json    # Generated filename mapped in metadata
+    │   │   ├── ch_def456.json    # Generated filename mapped in metadata
+    │   │   └── ch_ghi789.json    # Generated filename mapped in metadata
+    │   ├── audio/
+    │   │   ├── chapter_01_title.mp3
+    │   │   ├── chapter_02_title.mp3
+    │   │   └── manifest.json     # Audio manifest
+    │   └── assets/               # Language-specific asset OVERRIDES (optional)
+    │       └── cover_en.webp     # Only if different from shared
     ├── es/                       # Spanish translation
-    │   ├── content.json
-    │   ├── metadata.json
-    │   ├── audio/               # Future
-    │   └── localized_assets/    # Optional: Override shared assets
-    │       └── cover_es.webp    # Spanish cover with text
+    │   ├── metadata.json         # Same chapter IDs, different generated filenames
+    │   ├── chapters/             # Translated chapters with their own generated names
+    │   │   ├── ch_xyz123.json    # Different filename, same chapter ID as original
+    │   │   ├── ch_uvw456.json    # Different filename, same chapter ID as original
+    │   │   └── ch_rst789.json    # Different filename, same chapter ID as original
+    │   ├── audio/                # Future audio translations
+    │   │   └── manifest.json
+    │   └── assets/               # Language-specific overrides (optional)
+    │       └── cover_es.webp     # Spanish cover with localized text
     └── [other languages...]
 ```
 
-### Asset Resolution Strategy
+### Asset Resolution Strategy (Shared by Default)
 ```javascript
-// Asset resolution priority
-function getAsset(storyId, language, assetType) {
-  // 1. Check for localized override
-  const localizedPath = `stories/${storyId}/${language}/localized_assets/${assetType}`;
-  if (await r2.exists(localizedPath)) return localizedPath;
+// Asset resolution priority - shared assets with language overrides
+async function getAsset(storyId, language, assetType) {
+  // 1. Check for language-specific override
+  const languageOverridePath = `stories/${storyId}/${language}/assets/${assetType}`;
+  const languageOverride = await r2.get(languageOverridePath);
+  if (languageOverride) return { asset: languageOverride, path: languageOverridePath };
   
-  // 2. Fall back to shared master asset
-  const sharedPath = `stories/${storyId}/master/assets/${assetType}`;
-  return sharedPath;
+  // 2. Fall back to shared asset (default)
+  const sharedPath = `stories/${storyId}/assets/${assetType}`;
+  const sharedAsset = await r2.get(sharedPath);
+  if (sharedAsset) return { asset: sharedAsset, path: sharedPath };
+  
+  return null; // Asset not found
 }
+
+// Benefits:
+// - Single shared asset storage (efficient)
+// - Language-specific overrides when needed (e.g. cover with text)
+// - Automatic fallback to shared assets
+// - No duplication of identical assets
 ```
 
 ---
@@ -236,32 +259,160 @@ async function processMultiLanguageUpload(data) {
     });
   }
   
-  // 3. Upload to R2 with proper structure
+  // 3. Upload to R2 with chapter-level granularity
   await r2.put(`stories/${master.id}/master/metadata.json`, master);
-  await r2.put(`stories/${master.id}/${lang}/content.json`, content);
+  
+  // Upload individual chapters for fast loading
+  for (const [lang, content] of Object.entries({ en: master, ...translations })) {
+    const chaptersManifest = [];
+    
+    // Store individual chapter files with generated names
+    for (const chapter of content.chapters) {
+      const chapterUuid = `ch_${nanoid(8)}`;
+      const chapterFileName = `${chapterUuid}.json`;
+      
+      // Store chapter content to R2
+      const chapterR2Key = `stories/${master.id}/${lang}/chapters/${chapterFileName}`;
+      await r2.put(chapterR2Key, JSON.stringify({
+        chapterId: chapter.id,
+        title: chapter.title,
+        chapterNumber: chapter.chapterNumber,
+        blocks: chapter.blocks || []
+      }));
+      
+      // Add to chapters manifest (for metadata.json)
+      chaptersManifest.push({
+        id: chapter.id,
+        title: chapter.title,
+        chapterNumber: chapter.chapterNumber,
+        filename: chapterFileName,  // Generated filename
+        duration: chapter.duration || null,
+        audioUrl: chapter.audioUrl || null
+      });
+    }
+    
+    // Language-specific metadata with chapter API URLs (not direct filenames)
+    const metadata = {
+      title: content.title,
+      description: content.description,
+      totalChapters: content.chapters.length,
+      language: lang,
+      chapters: chaptersManifest.map(ch => ({
+        id: ch.id,
+        title: ch.title,
+        chapterNumber: ch.chapterNumber,
+        duration: ch.duration,
+        audioUrl: ch.audioUrl,
+        contentUrl: `/api/chapters/${master.id}/${ch.id}/content`  // API endpoint, not R2 path
+      }))
+    };
+    await r2.put(`stories/${master.id}/${lang}/metadata.json`, metadata);
+  }
 }
 ```
 
 ### Phase 3: API Updates (Days 6-7)
 ```typescript
-// API endpoint with language support
+// API endpoint with language support for metadata
 app.get('/api/content/:storyId/metadata/:language', async (c) => {
   const { storyId, language } = c.req.param();
   
-  // 1. Get master story
-  const story = await db.get('stories', storyId);
-  
-  // 2. If requesting translation, fetch from translations table
-  if (language !== story.origin_language) {
-    const translation = await db.get('story_translations', `${storyId}_${language}`);
-    if (!translation) {
-      // Fallback to origin language
-      return c.json(story.complete_metadata);
+  try {
+    // Try to get language-specific metadata from R2
+    const metadataKey = `stories/${storyId}/${language}/metadata.json`;
+    const metadata = await c.env.STORIES.get(metadataKey);
+    
+    if (metadata) {
+      return c.json(await metadata.json());
     }
-    return c.json(translation.translated_metadata);
+    
+    // Fallback to origin language
+    const story = await c.env.DB.prepare('SELECT * FROM stories WHERE id = ?').bind(storyId).first();
+    if (!story) {
+      return c.json({ error: 'Story not found' }, 404);
+    }
+    
+    const fallbackKey = `stories/${storyId}/${story.origin_language}/metadata.json`;
+    const fallbackMetadata = await c.env.STORIES.get(fallbackKey);
+    
+    if (fallbackMetadata) {
+      const data = await fallbackMetadata.json();
+      return c.json({ ...data, fallback_used: true, requested_language: language });
+    }
+    
+    return c.json({ error: 'No content available' }, 404);
+  } catch (error) {
+    return c.json({ error: 'Internal server error' }, 500);
   }
+});
+
+// Enhanced existing endpoint: /api/chapters/:storyId/:chapterId/content
+// This endpoint needs to be updated to support multilanguage via Accept-Language header
+app.get('/api/chapters/:storyId/:chapterId/content', async (c) => {
+  const { storyId, chapterId } = c.req.param();
   
-  return c.json(story.complete_metadata);
+  // Get requested language from Accept-Language header or query param
+  const acceptLanguage = c.req.header('Accept-Language') || 'en';
+  const requestedLanguage = c.req.query('language') || parseAcceptLanguage(acceptLanguage);
+  
+  try {
+    // Internal function to find chapter filename by ID
+    async function findChapterFilename(language: string) {
+      // First, get the language mapping from database
+      const translationQuery = `
+        SELECT translated_metadata FROM story_translations 
+        WHERE story_id = ? AND language = ?
+      `;
+      const translation = await c.env.DB.prepare(translationQuery).bind(storyId, language).first();
+      
+      if (translation) {
+        const metadata = JSON.parse(translation.translated_metadata);
+        const chapter = metadata.chapters.find(ch => ch.id === chapterId);
+        if (chapter) {
+          // Use the internal filename mapping (stored during upload)
+          return chapter._filename; // Internal field not exposed to frontend
+        }
+      }
+      return null;
+    }
+    
+    // Try to find chapter in requested language
+    let chapterFilename = await findChapterFilename(requestedLanguage);
+    let actualLanguage = requestedLanguage;
+    let fallbackUsed = false;
+    
+    if (!chapterFilename) {
+      // Fallback to origin language
+      const story = await c.env.DB.prepare('SELECT origin_language FROM stories WHERE id = ?').bind(storyId).first();
+      if (story) {
+        chapterFilename = await findChapterFilename(story.origin_language);
+        actualLanguage = story.origin_language;
+        fallbackUsed = true;
+      }
+    }
+    
+    if (chapterFilename) {
+      // Fetch the actual chapter content using the internal filename
+      const chapterKey = `stories/${storyId}/${actualLanguage}/chapters/${chapterFilename}`;
+      const chapter = await c.env.STORIES.get(chapterKey);
+      
+      if (chapter) {
+        const chapterData = await chapter.json();
+        return c.json({
+          ...chapterData,
+          ...(fallbackUsed && { 
+            fallback_used: true, 
+            requested_language: requestedLanguage,
+            served_language: actualLanguage 
+          })
+        });
+      }
+    }
+    
+    return c.json({ error: 'Chapter not found' }, 404);
+  } catch (error) {
+    return c.json({ error: 'Internal server error' }, 500);
+  }
 });
 ```
 

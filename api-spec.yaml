@@ -2,20 +2,27 @@ openapi: 3.0.3
 info:
   title: Audiobook API
   description: |
-    A comprehensive API for managing and consuming audiobook content.
+    A comprehensive API for managing and consuming audiobook content with advanced multilanguage support.
     
     This API provides functionality for:
     - User authentication via Auth0
-    - Story management and discovery
-    - Content delivery (text, audio, images)
+    - Story management and discovery with multilanguage filtering
+    - Individual chapter content delivery from R2 storage
+    - Content delivery (text, audio, images) with language-aware asset URLs
     - User profile management and preferences
     - Reading statistics and achievements
     - Support system with FAQs
     - User feedback and library management
     
-    Version 1.1.0 introduces comprehensive profile features for mobile apps.
+    **Version 2.0.0 - Multilanguage Architecture**
+    - Individual chapter content API with Accept-Language header support
+    - R2-based chapter storage with metadata.json mapping
+    - Automatic language fallback and enhanced asset URL resolution
+    - Story translations table integration for multilanguage content
+    - Removed internal translation_status and translation_quality from frontend APIs
+    
     The API is designed for integration with external applications and services.
-  version: 1.1.0
+  version: 2.0.0
   contact:
     name: Audiobook API Support
   license:
@@ -193,12 +200,6 @@ paths:
           schema:
             type: string
           description: Comma-separated list of tags to filter by
-        - name: translation_status
-          in: query
-          schema:
-            type: string
-            enum: [master, translated, in_progress, needs_review]
-          description: Filter by translation status for multilanguage support
       responses:
         '200':
           description: List of stories
@@ -858,6 +859,113 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  # Individual Chapter Content API - Multilanguage Architecture v2.0.0
+  /api/chapters/{storyId}/{chapterId}/content:
+    get:
+      tags:
+        - Chapters
+      summary: Get individual chapter content
+      description: |
+        **MULTILANGUAGE CHAPTER CONTENT API** - Serves individual chapter content from R2 storage
+        
+        **Features:**
+        - Accept-Language header parsing with RFC 7231 compliance
+        - Query parameter language override support (?language=xx)
+        - Automatic fallback to origin language when translation unavailable
+        - Uses story_translations table and R2 metadata.json for chapter resolution
+        - Performance optimized with CDN-friendly caching headers
+        - Enhanced asset URLs for proper language context
+        
+        **New R2 Chapter Structure:**
+        - Individual chapter files: `stories/{storyId}/{language}/chapters/ch_*.json`
+        - Chapter mapping via: `stories/{storyId}/{language}/metadata.json`
+        - Generated filenames with consistent ordering by chapter index
+        
+        **Chapter ID Format:**
+        Chapter IDs are unique identifiers found in the metadata.json file, not sequential numbers.
+        Examples: "chapter_9eda0a65", "chapter_73cf9601"
+        To get available chapter IDs, use the story metadata or unified content endpoints.
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Story identifier
+          example: "the-enchanted-bookshop-keeper"
+        - name: chapterId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Chapter identifier from metadata.json
+          example: "chapter_9eda0a65"
+        - name: language
+          in: query
+          schema:
+            type: string
+            default: "en"
+          description: Override language (takes precedence over Accept-Language header)
+          example: "es"
+      headers:
+        - name: Accept-Language
+          in: header
+          schema:
+            type: string
+          description: |
+            RFC 7231 compliant language preference header with quality factors.
+            Examples: "en-US,en;q=0.9,es;q=0.8,fr;q=0.5"
+          example: "en-US,en;q=0.9,es;q=0.8"
+      responses:
+        '200':
+          description: Chapter content with enhanced asset URLs
+          headers:
+            Content-Language:
+              schema:
+                type: string
+              description: Actual language of returned content
+              example: "en"
+            X-Fallback-Used:
+              schema:
+                type: boolean
+              description: Whether fallback language was used
+              example: false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChapterContent'
+        '404':
+          description: Chapter not found in any available language
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "CHAPTER_NOT_FOUND"
+                      message:
+                        type: string
+                        example: "Chapter 'chapter_9eda0a65' not found for story 'the-enchanted-bookshop-keeper'"
+                      details:
+                        type: object
+                        properties:
+                          storyId:
+                            type: string
+                            example: "the-enchanted-bookshop-keeper"
+                          chapterId:
+                            type: string
+                            example: "chapter_9eda0a65"
+                          requestedLanguage:
+                            type: string
+                            example: "es"
+                          acceptLanguageHeader:
+                            type: string
+                            example: "en-US,en;q=0.9,es;q=0.8"
 
   # StoryGen Import with Multilanguage Support
   /api/import/storygen/multilang:
@@ -3728,6 +3836,68 @@ components:
           example:
             position: "center"
             style: "bordered"
+
+    ChapterContent:
+      type: object
+      description: |
+        Complete chapter content with enhanced multilanguage support.
+        Returned by /api/chapters/{storyId}/{chapterId}/content
+      required:
+        - id
+        - title
+        - blocks
+      properties:
+        id:
+          type: string
+          description: Unique chapter identifier from story metadata
+          example: "chapter_9eda0a65"
+        title:
+          type: string
+          description: Chapter title in requested/resolved language
+          example: "Inheritance and New Beginnings"
+        description:
+          type: string
+          description: Optional chapter summary or description
+          example: "Elara discovers her aunt's mysterious legacy and the enchanted bookshop that comes with it."
+        number:
+          type: integer
+          description: Chapter number in the story sequence
+          example: 1
+        blocks:
+          type: array
+          description: Array of content blocks (text, images, audio, etc.)
+          items:
+            $ref: '#/components/schemas/ContentBlock'
+        metadata:
+          type: object
+          description: Chapter-level metadata
+          properties:
+            wordCount:
+              type: integer
+              description: Approximate word count for the chapter
+              example: 2500
+            estimatedReadingTime:
+              type: integer
+              description: Estimated reading time in minutes
+              example: 12
+            tags:
+              type: array
+              items:
+                type: string
+              description: Chapter-specific tags or themes
+              example: ["discovery", "magic", "inheritance"]
+            language:
+              type: string
+              description: Actual language of the returned content
+              example: "en"
+            fallbackUsed:
+              type: boolean
+              description: Whether fallback language was used due to translation unavailability
+              example: false
+        audioUrl:
+          type: string
+          description: Optional audio URL for full chapter narration
+          example: "/api/content/story-id/audio/en/chapter1_narration.mp3"
 
     FeedbackRequest:
       type: object
