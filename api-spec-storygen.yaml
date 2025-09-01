@@ -88,71 +88,209 @@ paths:
             schema:
               type: object
               required:
-                - title
-                - author
-                - language
+                - metadata
+                - assets
               properties:
-                title:
-                  type: string
-                  description: Story title in native language
-                  example: "Sabores del Futuro Revelados"
-                author:
-                  type: string
-                  description: Story author
-                  example: "AI Story Weaver"
-                description:
-                  type: string
-                  description: Story description in native language
-                  example: "Una aventura culinaria futurista"
-                genre:
-                  type: string
-                  description: |
-                    Story genre from supported list. Supports content-based auto-detection if not provided.
-                  enum: 
-                    - "fantasy"
-                    - "adventure"
-                    - "mystery"
-                    - "sci-fi"
-                    - "romance"
-                    - "thriller"
-                    - "horror"
-                    - "historical"
-                    - "comedy"
-                    - "drama"
-                    - "action"
-                    - "children"
-                  example: "fantasy"
-                language:
-                  type: string
-                  pattern: '^[a-z]{2}$'
-                  description: ISO 639-1 language code (creates language-specific story ID)
-                  example: "es"
-                language_group_id:
-                  type: string
-                  description: |
-                    Group ID for linking translations. 
-                    - **New story**: Auto-generated from title
-                    - **Translation**: Use existing master's group ID
-                  example: "future-flavors-unveiled"
-                is_master:
-                  type: boolean
-                  description: Whether this is the master/original version
-                  default: false
-                master_story_id:
-                  type: string
-                  description: ID of the master story (for translations)
-                  example: "future-flavors-unveiled"
-                translation_quality:
-                  type: integer
-                  minimum: 0
-                  maximum: 100
-                  description: Translation quality score (100 = original/perfect)
-                  default: 100
-                tags:
+                metadata:
+                  type: object
+                  description: Complete story metadata with chapters and content blocks
+                  required:
+                    - title
+                    - author
+                    - language
+                    - chapters
+                  properties:
+                    title:
+                      type: string
+                      description: Story title in native language
+                      example: "Sabores del Futuro Revelados"
+                    author:
+                      type: string
+                      description: Story author
+                      example: "AI Story Weaver"
+                    description:
+                      type: string
+                      description: Story description in native language
+                      example: "Una aventura culinaria futurista"
+                    genre:
+                      type: string
+                      description: |
+                        Story genre from supported list. Supports content-based auto-detection if not provided.
+                      enum: 
+                        - "fantasy"
+                        - "adventure"
+                        - "mystery"
+                        - "sci-fi"
+                        - "romance"
+                        - "thriller"
+                        - "horror"
+                        - "historical"
+                        - "comedy"
+                        - "drama"
+                        - "action"
+                        - "children"
+                      example: "fantasy"
+                    language:
+                      type: string
+                      pattern: '^[a-z]{2}$'
+                      description: ISO 639-1 language code (creates language-specific story ID)
+                      example: "es"
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                      description: Story tags for discovery and categorization
+                      example: ["adventure", "future", "cooking"]
+                    chapters:
+                      type: array
+                      description: Array of story chapters with content blocks
+                      items:
+                        type: object
+                        required:
+                          - id
+                          - title
+                          - chapterNumber
+                          - blocks
+                        properties:
+                          id:
+                            type: string
+                            description: Unique chapter identifier
+                            example: "chapter-1"
+                          title:
+                            type: string
+                            description: Chapter title
+                            example: "El Descubrimiento"
+                          chapterNumber:
+                            type: integer
+                            description: Chapter sequence number
+                            example: 1
+                          duration:
+                            type: number
+                            description: Chapter audio duration in seconds (optional)
+                            example: 595.128
+                          audioUrl:
+                            type: string
+                            description: Relative audio file path (optional)
+                            example: "chapter1.mp3"
+                          blocks:
+                            type: array
+                            description: Content blocks within the chapter
+                            items:
+                              type: object
+                              required:
+                                - id
+                                - type
+                                - order
+                                - content
+                              properties:
+                                id:
+                                  type: string
+                                  description: Unique block identifier
+                                  example: "block-1"
+                                type:
+                                  type: string
+                                  enum: ["text", "paragraph", "heading_1", "heading_2", "heading_3", "image", "quote", "audio"]
+                                  description: Type of content block
+                                  example: "paragraph"
+                                order:
+                                  type: integer
+                                  description: Order of block within chapter
+                                  example: 1
+                                content:
+                                  type: object
+                                  description: Block content (varies by type)
+                                  example: {"text": "En el año 2050, la cocina había evolucionado..."}
+                                metadata:
+                                  type: object
+                                  description: Additional block metadata (optional)
+                    language_group_id:
+                      type: string
+                      description: |
+                        Group ID for linking translations. 
+                        - **New story**: Auto-generated from title
+                        - **Translation**: Use existing master's group ID
+                      example: "future-flavors-unveiled"
+                    is_master:
+                      type: boolean
+                      description: Whether this is the master/original version
+                      default: false
+                    master_story_id:
+                      type: string
+                      description: ID of the master story (for translations)
+                      example: "future-flavors-unveiled-en"
+                    translation_quality:
+                      type: integer
+                      minimum: 0
+                      maximum: 100
+                      description: Translation quality score (0-100)
+                      example: 85
+                    styleGuide:
+                      type: object
+                      description: Visual and stylistic preferences
+                      properties:
+                        theme:
+                          type: string
+                          example: "futuristic"
+                        colorPalette:
+                          type: array
+                          items:
+                            type: string
+                          example: ["#3498db", "#e74c3c"]
+                        imageStyle:
+                          type: string
+                          example: "photorealistic"
+                        mood:
+                          type: string
+                          example: "adventurous"
+                assets:
                   type: array
+                  description: Array of asset files to be uploaded
                   items:
-                    type: string
-                  description: Story tags
+                    type: object
+                    required:
+                      - id
+                      - filename
+                      - type
+                      - expectedSize
+                    properties:
+                      id:
+                        type: string
+                        description: Unique asset identifier
+                        example: "cover-es"
+                      filename:
+                        type: string
+                        description: Asset filename
+                        example: "cover-spanish.jpg"
+                      type:
+                        type: string
+                        enum: ["image", "audio", "video", "document"]
+                        description: Asset type
+                        example: "image"
+                      category:
+                        type: string
+                        enum: ["cover", "thumbnail", "chapter", "scene", "character"]
+                        description: Asset category for organization
+                        example: "cover"
+                      expectedSize:
+                        type: integer
+                        description: Expected file size in bytes
+                        example: 150000
+                      description:
+                        type: string
+                        description: Asset description
+                        example: "Spanish cover image"
+                      placement:
+                        type: string
+                        enum: ["inline", "background", "overlay"]
+                        description: How asset should be displayed
+                        example: "inline"
+                      metadata:
+                        type: object
+                        description: Additional asset metadata
+                totalExpectedSize:
+                  type: integer
+                  description: Total expected size of all assets in bytes (optional)
+                  example: 2500000
                   example: ["sci-fi", "culinary", "adventure"]
                 expected_chapters:
                   type: integer
