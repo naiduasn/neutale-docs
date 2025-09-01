@@ -1,0 +1,541 @@
+# API Specification Addendum: StoryGen Import System v3.0
+# Updates to existing api-spec.yaml for the new simplified StoryGen import architecture
+
+openapi: 3.0.3
+info:
+  title: Audiobook API - StoryGen Import System v3.0 
+  description: |
+    **ADDENDUM: StoryGen Import System v3.0**
+    
+    This document describes the new simplified StoryGen import system with clean D1/R2 architecture:
+    
+    **Architecture Changes:**
+    - **D1 Database**: Essential metadata only for fast queries and listing
+    - **R2 Storage**: Complete content files (chapters, metadata, assets)
+    - **Asset URLs**: Generated from metadata and stored in D1
+    - **Multi-language**: Seamless language support with automatic URL generation
+    
+    **Performance Benefits:**
+    - 75% code reduction (1,300+ lines → 335 lines) 
+    - Fast story listing via D1 queries
+    - Rich content delivery via R2 on-demand
+    - Optimized asset URL handling
+    
+    **Key Improvements:**
+    - Simplified multipart form upload
+    - Automatic cover/thumbnail URL generation
+    - Enhanced metadata processing
+    - Better language field handling (originLanguage/language)
+    - Comprehensive logging and error handling
+    
+  version: 3.0.0
+
+# New StoryGen Import Endpoints
+paths:
+  /api/import/storygen:
+    post:
+      tags:
+        - StoryGen Import
+      summary: Import story from StoryGen format (v4.0 Individual Stories)
+      description: |
+        **NEW INDIVIDUAL STORY ARCHITECTURE v4.0**
+        
+        Revolutionary multilanguage architecture where each language creates a separate story record with native language titles and descriptions.
+        
+        **Key Changes:**
+        - Each language gets its own story ID (e.g., `story-es`, `story-fr`)
+        - Native language titles in database (Spanish users see Spanish titles)
+        - Stories linked via `language_group_id` for translation discovery
+        - Automatic chapters manifest generation for proper navigation
+        
+        **Form Fields:**
+        - `metadata`: JSON file with language-specific story metadata
+        - `content_{filename}`: Chapter content JSON files  
+        - `asset_{filename}`: Image/audio asset files
+        
+        **Features:**
+        - Native language display (titles/descriptions in requested language)
+        - Individual story records per language for better SEO and UX
+        - Automatic chapters manifest generation from chapter content
+        - Language group linking for translation discovery
+        - Enhanced error handling and logging
+        
+        **Authentication:**
+        - X-API-Key header with valid API key
+        - Basic authentication (storygen:password)
+        - Development mode (localhost only)
+        
+      security:
+        - ApiKeyAuth: []
+        - BasicAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                metadata:
+                  type: string
+                  format: binary
+                  description: Story metadata JSON file
+                content_chapter1.json:
+                  type: string  
+                  format: binary
+                  description: Chapter 1 content JSON file
+                content_chapter2.json:
+                  type: string
+                  format: binary
+                  description: Chapter 2 content JSON file (and so on...)
+                asset_cover.jpg:
+                  type: string
+                  format: binary
+                  description: Cover image file
+                asset_thumbnail.jpg:
+                  type: string
+                  format: binary
+                  description: Thumbnail image file
+              required:
+                - metadata
+            encoding:
+              metadata:
+                contentType: application/json
+              asset_cover.jpg:
+                contentType: image/jpeg
+              asset_thumbnail.jpg:
+                contentType: image/jpeg
+      responses:
+        '201':
+          description: Story imported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  story:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "future-flavors-unveiled-es"
+                        description: "Language-specific story ID"
+                      baseId:
+                        type: string  
+                        example: "future-flavors-unveiled"
+                        description: "Base story ID for grouping"
+                      languageGroupId:
+                        type: string
+                        example: "future-flavors-unveiled" 
+                        description: "Links all language versions"
+                      title:
+                        type: string
+                        example: "Sabores del Futuro Revelados"
+                        description: "Title in native language"
+                      language:
+                        type: string
+                        example: "es"
+                      author:
+                        type: string
+                        example: "AI Story Weaver"
+                      genre:
+                        type: string
+                        example: "Sci-Fi"
+                      totalChapters:
+                        type: integer
+                        example: 8
+                      status:
+                        type: string
+                        example: "published"
+                      isMaster:
+                        type: boolean
+                        example: false
+                        description: "Whether this is the master/original story"
+                      masterStoryId:
+                        type: string
+                        nullable: true
+                        example: "future-flavors-unveiled"
+                        description: "Reference to master story if not master"
+                  architecture:
+                    type: object
+                    properties:
+                      approach:
+                        type: string
+                        example: "individual_stories"
+                      description:
+                        type: string
+                        example: "Each language creates a separate story record with native language title/description"
+                      linking:
+                        type: string
+                        example: "Stories linked via language_group_id for translation discovery"
+                  uploaded:
+                    type: object
+                    properties:
+                      metadata:
+                        type: object
+                        properties:
+                          d1:
+                            type: string
+                            example: "stories table record"
+                          r2Global:
+                            type: string
+                            example: "stories/future-flavors-unveiled/metadata.json"
+                          r2Language:
+                            type: string
+                            example: "stories/future-flavors-unveiled/en/metadata.json"
+                      content:
+                        type: object
+                        properties:
+                          files:
+                            type: integer
+                            example: 8
+                          totalSize:
+                            type: integer
+                            example: 142856
+                      assets:
+                        type: object
+                        properties:
+                          files:
+                            type: integer
+                            example: 2
+                          totalSize:
+                            type: integer
+                            example: 458392
+                  urls:
+                    type: object
+                    properties:
+                      story:
+                        type: string
+                        example: "/api/stories/future-flavors-unveiled"
+                      metadata:
+                        type: string
+                        example: "/api/content/future-flavors-unveiled/metadata"
+                      languageMetadata:
+                        type: string
+                        example: "/api/content/future-flavors-unveiled/en/metadata"
+                      content:
+                        type: string
+                        example: "/api/content/future-flavors-unveiled/en/content"
+        '400':
+          description: Invalid request (missing metadata, invalid JSON, etc.)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "metadata file is required"
+                  details:
+                    type: string
+                    example: "Invalid story metadata format"
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authentication required"
+                  methods:
+                    type: array
+                    items:
+                      type: string
+                    example: 
+                      - "X-API-Key header with valid API key"
+                      - "Basic Authentication with storygen credentials"
+                      - "Development mode (NODE_ENV=development)"
+        '500':
+          description: Import failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Failed to import story"
+                  details:
+                    type: string
+                    example: "Database transaction failed"
+
+    get:
+      tags:
+        - StoryGen Import
+      summary: Get StoryGen import status and capabilities
+      description: |
+        Returns information about the StoryGen import system capabilities and supported features.
+      responses:
+        '200':
+          description: Import system status and capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+                    example: true
+                  version:
+                    type: string
+                    example: "3.0_simplified"
+                  architecture:
+                    type: object
+                    properties:
+                      d1:
+                        type: string
+                        example: "Essential metadata for queries and listing"
+                      r2:
+                        type: string
+                        example: "Complete content and asset storage"
+                  supported_formats:
+                    type: array
+                    items:
+                      type: string
+                    example: ["storygen_multipart_folder"]
+                  required_fields:
+                    type: array
+                    items:
+                      type: string
+                    example: ["metadata"]
+                  content_fields:
+                    type: string
+                    example: "content_{filename} - Chapter content files"
+                  asset_fields:
+                    type: string
+                    example: "asset_{filename} - Images, audio, and other assets"
+                  authentication:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - "X-API-Key header"
+                      - "Basic authentication (storygen:password)"
+                      - "Development mode (localhost only)"
+                  features:
+                    type: object
+                    properties:
+                      multiLanguageSupport:
+                        type: boolean
+                        example: true
+                      assetManagement:
+                        type: boolean
+                        example: true
+                      simpleArchitecture:
+                        type: boolean
+                        example: true
+                      languageQueries:
+                        type: boolean
+                        example: true
+                      cleanSeparation:
+                        type: boolean
+                        example: true
+                  storage_structure:
+                    type: object
+                    properties:
+                      d1:
+                        type: string
+                        example: "stories table with essential metadata only"
+                      r2:
+                        type: object
+                        properties:
+                          global:
+                            type: string
+                            example: "stories/{id}/metadata.json"
+                          language:
+                            type: string
+                            example: "stories/{id}/{lang}/metadata.json"
+                          content:
+                            type: string
+                            example: "stories/{id}/{lang}/content/*.json"
+                          shared_assets:
+                            type: string
+                            example: "stories/{id}/assets/*"
+                          language_assets:
+                            type: string
+                            example: "stories/{id}/{lang}/assets/*"
+
+# Enhanced Story Schema for StoryGen Integration
+components:
+  schemas:
+    StoryGenMetadata:
+      type: object
+      description: StoryGen metadata schema (flexible to support both language/originLanguage fields)
+      properties:
+        id:
+          type: string
+          example: "future-flavors-unveiled"
+        title:
+          type: string
+          example: "Future Flavors Unveiled"
+        author:
+          type: string
+          example: "AI Story Weaver"
+        description:
+          type: string
+          example: "In the bustling metropolis of Neo-Haven..."
+        genre:
+          type: string
+          example: "Sci-Fi"
+        language:
+          type: string
+          description: "Primary language (optional - can use originLanguage instead)"
+          example: "en"
+        originLanguage:
+          type: string
+          description: "Alternative field for primary language"
+          example: "en"
+        totalChapters:
+          type: integer
+          example: 8
+        readingTime:
+          type: integer
+          description: "Estimated reading time in minutes"
+          example: 5
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["adventure", "sci-fi"]
+        coverImage:
+          type: string
+          description: "Cover image filename"
+          example: "cover.jpg"
+        thumbnail:
+          type: string
+          description: "Thumbnail image filename"
+          example: "thumbnail.jpg"
+        status:
+          type: string
+          enum: ["draft", "published", "archived"]
+          default: "published"
+          example: "published"
+      required:
+        - id
+        - title
+        - author
+        - description
+        - genre
+        - totalChapters
+        - readingTime
+        - tags
+
+    EnhancedStoryResponse:
+      type: object
+      description: Enhanced story response with asset URLs properly set
+      allOf:
+        - $ref: '#/components/schemas/Story'
+        - type: object
+          properties:
+            coverImageUrl:
+              type: string
+              nullable: false
+              description: "Direct URL to cover image (now properly generated)"
+              example: "/api/content/future-flavors-unveiled/assets/cover.jpg"
+            thumbnailUrl:
+              type: string
+              nullable: false
+              description: "Direct URL to thumbnail image (now properly generated)"
+              example: "/api/content/future-flavors-unveiled/assets/thumbnail.jpg"
+            supportedLanguages:
+              type: array
+              items:
+                type: string
+              description: "All supported languages for this story"
+              example: ["en", "es", "fr", "de", "zh", "hi", "ru", "ja", "ko", "ar", "pt", "id"]
+            originLanguage:
+              type: string
+              description: "Primary/original language of the story"
+              example: "en"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: "StoryGen API key for import authentication"
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: "Basic authentication (storygen:password) for development"
+
+# Updated API Usage Examples
+examples:
+  StoryGenImportRequest:
+    summary: Complete StoryGen import example
+    description: |
+      Example of importing a multi-language story with assets using the new simplified system.
+    value:
+      # Form data (multipart/form-data):
+      metadata: |
+        {
+          "id": "future-flavors-unveiled",
+          "title": "Future Flavors Unveiled",
+          "author": "AI Story Weaver",
+          "description": "In the bustling metropolis of Neo-Haven...",
+          "genre": "Sci-Fi",
+          "originLanguage": "en",
+          "totalChapters": 8,
+          "readingTime": 5,
+          "tags": ["adventure"],
+          "coverImage": "cover.jpg",
+          "thumbnail": "thumbnail.jpg",
+          "status": "published"
+        }
+      # Additional form fields:
+      # content_chapter1.json: { Chapter 1 JSON content }
+      # content_chapter2.json: { Chapter 2 JSON content }
+      # asset_cover.jpg: <binary image data>
+      # asset_thumbnail.jpg: <binary image data>
+
+  EnhancedStoryListResponse:
+    summary: Enhanced story list with proper asset URLs
+    description: |
+      Story listing response with properly generated cover/thumbnail URLs from the new system.
+    value:
+      stories:
+        - id: "future-flavors-unveiled"
+          title: "Future Flavors Unveiled"
+          author: "AI Story Weaver"
+          description: "In the bustling metropolis of Neo-Haven..."
+          genre: "Sci-Fi"
+          originLanguage: "en"
+          supportedLanguages: ["en", "es", "fr", "de", "zh", "hi", "ru", "ja", "ko", "ar", "pt", "id"]
+          totalChapters: 8
+          readingTime: 5
+          tags: ["adventure"]
+          coverImageUrl: "/api/content/future-flavors-unveiled/assets/cover.jpg"
+          thumbnailUrl: "/api/content/future-flavors-unveiled/assets/thumbnail.jpg"
+          status: "published"
+          createdAt: "2025-08-31T15:00:00Z"
+      pagination:
+        page: 1
+        limit: 20
+        total: 1
+        totalPages: 1
+
+# UI Integration Notes
+tags:
+  - name: StoryGen Import
+    description: |
+      **StoryGen Import System v3.0**
+      
+      New simplified import system with clean D1/R2 architecture for optimal performance:
+      
+      **UI Integration Pattern:**
+      1. **Story Discovery**: Use existing `/api/stories` endpoints (enhanced with proper asset URLs)
+      2. **Content Reading**: Use existing content endpoints for rich chapter content
+      3. **Asset Loading**: Direct URLs from D1 metadata (coverImageUrl, thumbnailUrl)
+      4. **Multi-language**: Automatic language support via supportedLanguages array
+      
+      **Performance Benefits:**
+      - Fast story listing via D1 queries
+      - On-demand content loading via R2
+      - Optimized asset URL handling
+      - Multi-language support built-in
+      
+      See `docs/UI_INTEGRATION_GUIDE.md` for complete implementation details.

@@ -968,6 +968,102 @@ paths:
                             example: "en-US,en;q=0.9,es;q=0.8"
 
   # StoryGen Import with Multilanguage Support
+  /api/import/storygen:
+    post:
+      tags:
+        - Import
+      summary: Import story from StoryGen (supports multilanguage)
+      description: |
+        **STORYGEN IMPORT API** - Import stories from StoryGen platform with multilanguage support
+        
+        **Features:**
+        - Automatic new story creation or translation addition
+        - Detects existing stories and adds translations without UNIQUE constraint errors
+        - Supports complete story structure with content blocks and assets
+        - Language-specific R2 storage organization
+        
+        **Authentication Required**: StoryGen API key or development mode
+        
+        **Usage:**
+        - For new story: Upload with `language: "en"` (or primary language)
+        - For translation: Upload with `language: "es"` (target language) using same story title
+        - System automatically detects existing stories and handles appropriately
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - story_data
+              properties:
+                story_data:
+                  type: string
+                  format: binary
+                  description: JSON file containing complete storygen data with language field
+                asset_cover:
+                  type: string
+                  format: binary
+                  description: Cover image file (optional)
+                asset_thumbnail:
+                  type: string
+                  format: binary
+                  description: Thumbnail image file (optional)
+      responses:
+        '201':
+          description: Story imported successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  story:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "test-multilanguage-story"
+                      title:
+                        type: string
+                        example: "Test Story"
+                      language:
+                        type: string
+                        example: "en"
+                      chapters:
+                        type: number
+                        example: 5
+                  uploaded:
+                    type: object
+                    properties:
+                      metadata:
+                        type: string
+                        example: "stories/story-id/en/metadata.json"
+                      chapters:
+                        type: array
+                        items:
+                          type: object
+                      assets:
+                        type: array
+                        items:
+                          type: object
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/import/storygen/multilang:
     post:
       tags:
