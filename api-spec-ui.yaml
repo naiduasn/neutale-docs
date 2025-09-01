@@ -1,0 +1,1563 @@
+openapi: 3.0.3
+info:
+  title: Neutale Audiobook Platform - UI/Frontend API
+  description: |
+    API specification for frontend client integration and user-facing features.
+    
+    ## Individual Story Architecture v4.0
+    
+    This API supports the new Individual Story Architecture:
+    - **Native Language Display**: Users see titles in their native language
+    - **Language-Specific Story IDs**: Each translation has unique ID (`story-es`, `story-fr`) 
+    - **Translation Discovery**: Find all language versions via language groups
+    - **Seamless Language Switching**: Switch between translations preserving reading progress
+    
+    ## Key Features
+    
+    - **Story Discovery & Search**: Browse, filter, and search stories by language, genre, author
+    - **Content Delivery**: Chapter-based audio and text streaming optimized for mobile
+    - **User Tracking**: Reading progress, bookmarks, library management, and cross-device sync
+    - **Subscription & Billing**: Premium features with Dodo Payments integration
+    - **Reviews & Feedback**: Community ratings and review system
+    
+    ## Authentication
+    
+    Most endpoints require Auth0 JWT tokens:
+    ```
+    Authorization: Bearer <jwt-token>
+    ```
+    
+    ## Mobile Optimization
+    
+    - **Range Requests**: Audio streaming supports byte-range requests for progressive loading
+    - **Offline Sync**: Download progress and bookmarks for offline access
+    - **Bandwidth Optimization**: Compressed responses and efficient caching
+    
+  version: 4.0.0
+  contact:
+    name: Neutale API Support  
+    email: support@neutale.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://audiobook-dev.sunny250486.workers.dev
+    description: Development environment
+  - url: https://audiobook-prod.sunny250486.workers.dev
+    description: Production environment
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Story Discovery & Browse
+  /api/stories:
+    get:
+      tags:
+        - Story Discovery
+      summary: Browse and search stories
+      description: |
+        **Individual Story Architecture v4.0 - Enhanced Language Support**
+        
+        Browse stories with native language display and advanced filtering:
+        - `?language=es` - Show Spanish stories with Spanish titles
+        - `?languages=es,fr` - Stories available in BOTH Spanish AND French  
+        - `?audio_language=es` - Stories with Spanish audio
+        - `?quality_min=80` - High-quality translations only
+        
+        **Key Features:**
+        - Native language titles (Spanish users see Spanish titles)
+        - Translation quality scores and statistics  
+        - Featured story curation with cover images
+        - Advanced sorting (newest, popular, top-rated)
+        - Pagination with mobile-optimized limits
+        
+      operationId: browseStories
+      parameters:
+        - name: language
+          in: query
+          description: Filter stories by language (shows native titles)
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+            example: "es"
+        - name: languages
+          in: query  
+          description: Filter stories available in ALL specified languages (comma-separated)
+          schema:
+            type: string
+            pattern: '^[a-z]{2}(,[a-z]{2})*$'
+            example: "es,fr,de"
+        - name: audio_language
+          in: query
+          description: Filter stories with audio in specific language
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+            example: "es"
+        - name: quality_min
+          in: query
+          description: Minimum translation quality score (0-100)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+            example: 80
+        - name: search
+          in: query
+          description: Search query for titles, authors, descriptions
+          schema:
+            type: string
+            example: "sabores futuro"
+        - name: genre
+          in: query
+          description: Filter by genre
+          schema:
+            type: string
+            example: "Fantasy"
+        - name: author
+          in: query
+          description: Filter by author
+          schema:
+            type: string
+            example: "AI Story Weaver"
+        - name: tags
+          in: query
+          description: Filter by tags (comma-separated)
+          schema:
+            type: string
+            example: "sci-fi,culinary"
+        - name: featured
+          in: query
+          description: Show only featured stories
+          schema:
+            type: boolean
+            example: true
+        - name: sort
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [newest, popular, top_rated, featured]
+            default: newest
+        - name: duration
+          in: query
+          description: Filter by reading time
+          schema:
+            type: string
+            enum: [short, medium, long]
+        - name: page
+          in: query
+          description: Page number (1-based)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Stories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Story'
+                  total:
+                    type: integer
+                    description: Total number of stories matching filters
+                    example: 150
+                  page:
+                    type: integer
+                    example: 1
+                  limit:
+                    type: integer
+                    example: 20
+                  totalPages:
+                    type: integer
+                    example: 8
+                  hasNext:
+                    type: boolean
+                    example: true
+                  hasPrev:
+                    type: boolean
+                    example: false
+                  meta:
+                    type: object
+                    nullable: true
+                    description: Query metadata for debugging and client information
+                    properties:
+                      searchQuery:
+                        type: string
+                        nullable: true
+                      sortBy:
+                        type: string
+                      appliedFilters:
+                        type: object
+                        properties:
+                          language:
+                            type: string
+                            nullable: true
+                          genre:
+                            type: string
+                            nullable: true
+                          featured:
+                            type: boolean
+                            nullable: true
+                      languageFiltering:
+                        type: object
+                        properties:
+                          singleLanguage:
+                            type: string
+                            nullable: true
+                          audioLanguage:
+                            type: string
+                            nullable: true
+                          qualityThreshold:
+                            type: integer
+                            nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/stories/{storyId}:
+    get:
+      tags:
+        - Story Discovery
+      summary: Get individual story details
+      description: |
+        Retrieve complete story information including chapters manifest.
+        
+        **Individual Story Architecture v4.0:**
+        - Supports language-specific story IDs (`story-es`, `story-fr`)
+        - Returns native language metadata
+        - Includes chapters manifest for audio/text streaming
+        - Lightweight response optimized for mobile
+        
+      operationId: getStory
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          description: Story ID (language-specific for v4.0)
+          schema:
+            type: string
+            example: "future-flavors-unveiled-es"
+        - name: language
+          in: query
+          description: Preferred language for fallback content
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+            default: "en"
+      responses:
+        '200':
+          description: Story retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryDetailed'
+        '404':
+          description: Story not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/stories/group/{languageGroupId}:
+    get:
+      tags:
+        - Story Discovery
+      summary: Get all translations of a story
+      description: |
+        **NEW in Individual Story Architecture v4.0**
+        
+        Discover all language versions of a story for language switching.
+        
+        **Features:**
+        - Master story identification
+        - Translation quality scores
+        - UI-ready language switcher data
+        - Complete API endpoints for each translation
+        
+      operationId: getStoryTranslations
+      parameters:
+        - name: languageGroupId
+          in: path
+          required: true
+          description: Language group ID linking all translations
+          schema:
+            type: string
+            example: "future-flavors-unveiled"
+      responses:
+        '200':
+          description: Translation group retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  languageGroupId:
+                    type: string
+                    example: "future-flavors-unveiled"
+                  master:
+                    type: string
+                    description: Master story ID
+                    example: "future-flavors-unveiled"
+                  masterStory:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      title:
+                        type: string
+                      language:
+                        type: string
+                      author:
+                        type: string
+                  translations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "future-flavors-unveiled-es"
+                        language:
+                          type: string
+                          example: "es"
+                        title:
+                          type: string
+                          example: "Sabores del Futuro Revelados"
+                        description:
+                          type: string
+                        author:
+                          type: string
+                        isMaster:
+                          type: boolean
+                        translationQuality:
+                          type: integer
+                        coverImageUrl:
+                          type: string
+                        thumbnailUrl:
+                          type: string
+                        totalChapters:
+                          type: integer
+                        readingTime:
+                          type: integer
+                        status:
+                          type: string
+                        createdAt:
+                          type: string
+                        apiEndpoints:
+                          type: object
+                          properties:
+                            story:
+                              type: string
+                            metadata:
+                              type: string
+                            content:
+                              type: string
+                  stats:
+                    type: object
+                    properties:
+                      totalTranslations:
+                        type: integer
+                      averageQuality:
+                        type: integer
+                      availableLanguages:
+                        type: array
+                        items:
+                          type: string
+                      hasAudio:
+                        type: boolean
+                      masterLanguage:
+                        type: string
+                      totalChapters:
+                        type: integer
+                  ui:
+                    type: object
+                    description: UI helper data
+                    properties:
+                      defaultTranslation:
+                        type: string
+                      languageSwitcher:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code:
+                              type: string
+                            name:
+                              type: string
+                            storyId:
+                              type: string
+                            title:
+                              type: string
+                            quality:
+                              type: integer
+        '404':
+          description: Language group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # Content Delivery
+  /api/content/{storyId}/{language}/metadata:
+    get:
+      tags:
+        - Content Delivery
+      summary: Get language-specific story metadata
+      description: |
+        **Individual Story Architecture v4.0 - Enhanced Metadata**
+        
+        Retrieve complete story metadata for specific language version.
+        
+        **Features:**
+        - Language-specific story ID support
+        - Multi-fallback strategy (language → global → legacy)
+        - Native language content and titles
+        - Chapters manifest for structured content
+        
+      operationId: getStoryMetadata
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          description: Story ID (supports both base ID and language-specific ID)
+          schema:
+            type: string
+            example: "future-flavors-unveiled-es"
+        - name: language
+          in: path
+          required: true
+          description: Target language
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+            example: "es"
+      responses:
+        '200':
+          description: Metadata retrieved successfully
+          headers:
+            Content-Language:
+              description: Language of returned content
+              schema:
+                type: string
+            X-Metadata-Source:
+              description: Source of metadata (language-specific, global-fallback, etc.)
+              schema:
+                type: string
+            X-Story-Architecture:
+              description: Story architecture version
+              schema:
+                type: string
+                example: "individual-v4.0"
+            Cache-Control:
+              description: Caching instructions
+              schema:
+                type: string
+                example: "public, max-age=300"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoryMetadata'
+        '404':
+          description: Metadata not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/chapters/{storyId}/{chapterId}/content:
+    get:
+      tags:
+        - Content Delivery
+      summary: Get chapter text content
+      description: |
+        Retrieve structured text content for a specific chapter.
+        
+        **Content Blocks Architecture:**
+        - Mixed content types (text, images, audio, quotes)
+        - Mobile-optimized rendering
+        - Asset URL resolution
+        
+      operationId: getChapterContent
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "future-flavors-unveiled-es"
+        - name: chapterId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "chapter_01"
+        - name: language
+          in: query
+          description: Content language preference
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+            default: "en"
+      responses:
+        '200':
+          description: Chapter content retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "chapter_01"
+                  title:
+                    type: string
+                    example: "El Despertar Culinario"
+                  chapterNumber:
+                    type: integer
+                    example: 1
+                  language:
+                    type: string
+                    example: "es"
+                  content:
+                    type: array
+                    description: Content blocks array
+                    items:
+                      $ref: '#/components/schemas/ContentBlock'
+                  metadata:
+                    type: object
+                    properties:
+                      wordCount:
+                        type: integer
+                      readingTime:
+                        type: integer
+                      audioAvailable:
+                        type: boolean
+                      audioUrl:
+                        type: string
+                        nullable: true
+        '404':
+          description: Chapter not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/content/{storyId}/audio/{language}/{filename}:
+    get:
+      tags:
+        - Content Delivery
+      summary: Stream audio content
+      description: |
+        Stream audio files with mobile optimization.
+        
+        **Mobile Audio Streaming:**
+        - Byte-range request support for progressive loading
+        - Multiple audio formats (MP3, M4A, OGG)
+        - Aggressive caching for offline playback
+        - Language-specific audio with shared asset fallback
+        
+      operationId: streamAudio
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "future-flavors-unveiled-es"
+        - name: language
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+            example: "es"
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "chapter_01.mp3"
+        - name: Range
+          in: header
+          required: false
+          description: Byte range for progressive streaming
+          schema:
+            type: string
+            example: "bytes=0-1023"
+      responses:
+        '200':
+          description: Full audio file
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                example: "audio/mpeg"
+            Content-Length:
+              schema:
+                type: integer
+            Accept-Ranges:
+              schema:
+                type: string
+                example: "bytes"
+            Cache-Control:
+              schema:
+                type: string
+            X-Asset-Source:
+              schema:
+                type: string
+                example: "language-specific"
+            X-Fallback-Used:
+              schema:
+                type: string
+                example: "false"
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Partial audio content (byte range)
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: "bytes 0-1023/245760"
+            Accept-Ranges:
+              schema:
+                type: string
+                example: "bytes"
+            Content-Length:
+              schema:
+                type: integer
+            Content-Type:
+              schema:
+                type: string
+                example: "audio/mpeg"
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Audio file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '416':
+          description: Range not satisfiable
+          headers:
+            Content-Range:
+              schema:
+                type: string
+                example: "bytes */245760"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # User Management
+  /api/user/progress:
+    get:
+      tags:
+        - User Tracking
+      summary: Get user reading progress
+      description: |
+        Retrieve user's reading progress across all stories.
+        
+        **Individual Story Architecture v4.0:**
+        - Tracks progress per language-specific story ID
+        - Cross-device synchronization support
+        - Reading streaks and achievements
+        
+      operationId: getUserProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: story_id
+          in: query
+          description: Filter by specific story
+          schema:
+            type: string
+            example: "future-flavors-unveiled-es"
+        - name: limit
+          in: query
+          description: Number of items to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Progress data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  progress:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserProgress'
+                  stats:
+                    type: object
+                    properties:
+                      totalStoriesStarted:
+                        type: integer
+                      totalStoriesCompleted:
+                        type: integer
+                      totalReadingTime:
+                        type: integer
+                        description: Total minutes read
+                      currentStreak:
+                        type: integer
+                        description: Days of consecutive reading
+                      longestStreak:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - User Tracking
+      summary: Update reading progress
+      description: |
+        Update user's current reading position.
+        
+        **Mobile Integration:**
+        - Automatic progress sync across devices
+        - Chapter-level and sentence-level tracking
+        - Offline progress queuing
+        
+      operationId: updateUserProgress
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - story_id
+                - chapter_id
+                - progress_percentage
+              properties:
+                story_id:
+                  type: string
+                  example: "future-flavors-unveiled-es"
+                chapter_id:
+                  type: string
+                  example: "chapter_01"
+                progress_percentage:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  example: 75.5
+                reading_time_seconds:
+                  type: integer
+                  description: Time spent reading this session
+                  example: 180
+                last_position:
+                  type: object
+                  description: Detailed position information
+                  properties:
+                    paragraph_index:
+                      type: integer
+                    sentence_index:
+                      type: integer
+                    word_index:
+                      type: integer
+                device_info:
+                  type: object
+                  description: Device information for sync
+                  properties:
+                    device_id:
+                      type: string
+                    platform:
+                      type: string
+                      enum: [ios, android, web]
+                    app_version:
+                      type: string
+      responses:
+        '200':
+          description: Progress updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  updated_progress:
+                    $ref: '#/components/schemas/UserProgress'
+                  achievements:
+                    type: array
+                    description: Any newly unlocked achievements
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        icon:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/user/bookmarks:
+    get:
+      tags:
+        - User Tracking
+      summary: Get user bookmarks
+      description: Get user's saved bookmarks and favorites
+      operationId: getUserBookmarks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          description: Bookmark type filter
+          schema:
+            type: string
+            enum: [story, chapter, quote]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Bookmarks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookmarks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserBookmark'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - User Tracking
+      summary: Add bookmark
+      description: Add a new bookmark or favorite
+      operationId: addBookmark
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - story_id
+                - type
+              properties:
+                story_id:
+                  type: string
+                  example: "future-flavors-unveiled-es"
+                chapter_id:
+                  type: string
+                  nullable: true
+                type:
+                  type: string
+                  enum: [story, chapter, quote]
+                title:
+                  type: string
+                  description: Custom bookmark title
+                note:
+                  type: string
+                  description: User note
+                position:
+                  type: object
+                  description: Position within content
+                  properties:
+                    paragraph_index:
+                      type: integer
+                    sentence_index:
+                      type: integer
+                quote_text:
+                  type: string
+                  description: Selected text for quote bookmarks
+      responses:
+        '201':
+          description: Bookmark created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  bookmark:
+                    $ref: '#/components/schemas/UserBookmark'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # Search & Discovery
+  /api/search:
+    get:
+      tags:
+        - Search
+      summary: Search stories and content
+      description: |
+        Full-text search across stories, authors, and content.
+        
+        **Individual Story Architecture v4.0:**
+        - Language-aware search results
+        - Native language title display
+        - Translation quality in results
+        
+      operationId: searchStories
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query
+          schema:
+            type: string
+            example: "sabores futuro"
+        - name: language
+          in: query
+          description: Search within specific language
+          schema:
+            type: string
+            pattern: '^[a-z]{2}$'
+        - name: type
+          in: query
+          description: Search type
+          schema:
+            type: string
+            enum: [all, stories, authors, content]
+            default: all
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                          enum: [story, author, chapter]
+                        id:
+                          type: string
+                        title:
+                          type: string
+                        description:
+                          type: string
+                        language:
+                          type: string
+                        relevance_score:
+                          type: number
+                        highlight:
+                          type: string
+                          description: Highlighted match text
+                  total:
+                    type: integer
+                  searchTime:
+                    type: string
+                    example: "0.045s"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/stories/suggestions:
+    get:
+      tags:
+        - Search
+      summary: Get search suggestions
+      description: Autocomplete suggestions for search queries
+      operationId: getSearchSuggestions
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Partial search query
+          schema:
+            type: string
+            minLength: 2
+            example: "sab"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 5
+      responses:
+        '200':
+          description: Search suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  suggestions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+                        type:
+                          type: string
+                          enum: [story, author, genre]
+                        id:
+                          type: string
+                          nullable: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # Billing & Subscription
+  /api/billing/plans:
+    get:
+      tags:
+        - Billing
+      summary: Get subscription plans
+      description: Retrieve available subscription plans
+      operationId: getSubscriptionPlans
+      responses:
+        '200':
+          description: Subscription plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubscriptionPlan'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/billing/checkout-link:
+    post:
+      tags:
+        - Billing
+      summary: Create checkout session
+      description: Create a checkout session for subscription purchase
+      operationId: createCheckoutSession
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - plan_id
+              properties:
+                plan_id:
+                  type: string
+                  example: "plan_monthly_premium"
+                success_url:
+                  type: string
+                  format: uri
+                  example: "https://app.neutale.com/subscription/success"
+                cancel_url:
+                  type: string
+                  format: uri
+                  example: "https://app.neutale.com/subscription/cancel"
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkout_url:
+                    type: string
+                    format: uri
+                  session_id:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # Metadata Endpoints
+  /api/stories/genres:
+    get:
+      tags:
+        - Metadata
+      summary: Get available genres
+      description: Get list of all available story genres
+      operationId: getGenres
+      responses:
+        '200':
+          description: Genres list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  genres:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Fantasy", "Sci-Fi", "Romance", "Mystery"]
+
+  /api/stories/languages:
+    get:
+      tags:
+        - Metadata
+      summary: Get available languages
+      description: |
+        **Individual Story Architecture v4.0 - Language Statistics**
+        
+        Get all available languages with comprehensive statistics:
+        - Story count per language
+        - Audio availability statistics  
+        - Average translation quality scores
+        - Human-readable language names
+        
+      operationId: getLanguages
+      responses:
+        '200':
+          description: Languages with statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  languages:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          example: "es"
+                        name:
+                          type: string
+                          example: "Spanish"
+                        storyCount:
+                          type: integer
+                          example: 45
+                        audioCount:
+                          type: integer
+                          example: 32
+                        qualityStats:
+                          type: object
+                          properties:
+                            average:
+                              type: number
+                              example: 87.5
+                            min:
+                              type: integer
+                            max:
+                              type: integer
+                  total:
+                    type: integer
+                    description: Total number of languages
+                  totalStories:
+                    type: integer
+                    description: Total unique stories across all languages
+
+components:
+  schemas:
+    Story:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "future-flavors-unveiled-es"
+        title:
+          type: string
+          example: "Sabores del Futuro Revelados"
+        author:
+          type: string
+          example: "AI Story Weaver"
+        description:
+          type: string
+          example: "Una aventura culinaria futurista"
+        genre:
+          type: string
+          example: "Fantasy"
+        language:
+          type: string
+          example: "es"
+        originLanguage:
+          type: string
+          example: "en"
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+          example: ["en", "es", "fr"]
+        languageGroupId:
+          type: string
+          example: "future-flavors-unveiled"
+        isMaster:
+          type: boolean
+          example: false
+        translationQuality:
+          type: integer
+          example: 95
+        readingTime:
+          type: integer
+          description: Estimated reading time in minutes
+          example: 25
+        totalChapters:
+          type: integer
+          example: 12
+        coverImageUrl:
+          type: string
+          example: "/api/content/future-flavors-unveiled-es/assets/cover.jpg"
+        thumbnailUrl:
+          type: string
+          example: "/api/content/future-flavors-unveiled-es/assets/thumbnail.jpg"
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["sci-fi", "culinary", "adventure"]
+        status:
+          type: string
+          example: "published"
+        length:
+          type: string
+          enum: [short, medium, long]
+          example: "medium"
+        created_at:
+          type: string
+          format: date-time
+    
+    StoryDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Story'
+        - type: object
+          properties:
+            chapters:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "chapter_01"
+                  title:
+                    type: string
+                    example: "El Despertar Culinario"
+                  chapterNumber:
+                    type: integer
+                    example: 1
+                  duration:
+                    type: integer
+                    description: Audio duration in seconds
+                    example: 1200
+                  audioUrl:
+                    type: string
+                    example: "/api/content/future-flavors-unveiled-es/audio/chapter_01.mp3"
+                  contentUrl:
+                    type: string
+                    example: "/api/chapters/future-flavors-unveiled-es/chapter_01/content"
+            styleGuide:
+              type: object
+              properties:
+                theme:
+                  type: string
+                colorPalette:
+                  type: array
+                  items:
+                    type: string
+                imageStyle:
+                  type: string
+                mood:
+                  type: string
+            review:
+              type: object
+              properties:
+                overall_rating:
+                  type: integer
+                verdict:
+                  type: string
+                final_rating:
+                  type: integer
+                quality_achieved:
+                  type: boolean
+    
+    StoryMetadata:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        author:
+          type: string
+        description:
+          type: string
+        language:
+          type: string
+        chapters:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              title:
+                type: string
+              chapterNumber:
+                type: integer
+        assets:
+          type: array
+          items:
+            type: object
+            properties:
+              filename:
+                type: string
+              type:
+                type: string
+              url:
+                type: string
+    
+    ContentBlock:
+      type: object
+      required:
+        - type
+        - content
+      properties:
+        type:
+          type: string
+          enum: [text, heading, image, audio, quote, separator]
+        content:
+          type: string
+        metadata:
+          type: object
+          properties:
+            style:
+              type: string
+            alt_text:
+              type: string
+            duration:
+              type: integer
+            attribution:
+              type: string
+    
+    UserProgress:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        story_id:
+          type: string
+        chapter_id:
+          type: string
+        progress_percentage:
+          type: number
+          minimum: 0
+          maximum: 100
+        last_read_at:
+          type: string
+          format: date-time
+        reading_time_total:
+          type: integer
+          description: Total reading time in seconds
+        completion_status:
+          type: string
+          enum: [not_started, in_progress, completed]
+        device_last_used:
+          type: string
+        last_position:
+          type: object
+          properties:
+            paragraph_index:
+              type: integer
+            sentence_index:
+              type: integer
+    
+    UserBookmark:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        story_id:
+          type: string
+        chapter_id:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [story, chapter, quote]
+        title:
+          type: string
+        note:
+          type: string
+          nullable: true
+        quote_text:
+          type: string
+          nullable: true
+        position:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    
+    SubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: object
+          properties:
+            amount:
+              type: integer
+            currency:
+              type: string
+            interval:
+              type: string
+              enum: [month, year]
+        features:
+          type: array
+          items:
+            type: string
+        trial_days:
+          type: integer
+          nullable: true
+    
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth0 JWT token
+
+tags:
+  - name: Story Discovery
+    description: Browse, search, and discover stories
+  - name: Content Delivery
+    description: Stream and deliver story content
+  - name: User Tracking
+    description: Progress tracking, bookmarks, and personalization
+  - name: Search
+    description: Search and autocomplete functionality
+  - name: Billing
+    description: Subscription and payment management
+  - name: Metadata
+    description: System metadata and configuration

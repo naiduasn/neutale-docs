@@ -1,0 +1,1116 @@
+openapi: 3.0.3
+info:
+  title: Neutale Audiobook Platform - Content Upload API
+  description: |
+    Progressive Upload API for robust, multilanguage story creation and content management.
+    
+    ## Individual Story Architecture v4.0
+    
+    This API supports the new Individual Story Architecture where:
+    - **Language-Specific Story Records**: Each language version is a separate story (`story-es`, `story-fr`)
+    - **Language Group Linking**: Stories linked via `language_group_id` for translation discovery
+    - **Native Language Display**: Users see titles in their native language
+    - **Translation Quality Tracking**: Quality scores and master/translation relationships
+    
+    ## Authentication
+    
+    All endpoints require authentication via:
+    - JWT Bearer token in Authorization header
+    - Or valid API key (for automated systems)
+    
+    ## Progressive Upload Workflow
+    
+    **Solves File Size Issues**: Instead of single large uploads, content is uploaded incrementally with validation at each step.
+    
+    ### **Single Language Story**:
+    1. **Initialize**: `POST /api/progressive-upload/init` - Create story with metadata
+    2. **Upload Content**: `POST /api/progressive-upload/upload-content` - Upload chapters incrementally  
+    3. **Upload Assets**: `POST /api/progressive-upload/upload-asset` - Upload images/audio individually
+    4. **Finalize**: `POST /api/progressive-upload/finalize` - Complete and publish story
+    
+    ### **Multilanguage Story Workflow**:
+    1. **Create Master Story** (English): Follow normal workflow with `is_master: true`
+    2. **Create Translation** (Spanish): `POST /api/progressive-upload/init` with same `language_group_id`
+    3. **Upload Translated Content**: Same workflow with Spanish content
+    4. **Link Translations**: Automatic via shared `language_group_id`
+    
+    ## Key Benefits
+    
+    - ✅ **No File Size Limits**: Upload large stories chapter-by-chapter
+    - ✅ **Progress Tracking**: Resume uploads from any point
+    - ✅ **Validation Per Step**: Catch errors early, don't lose work
+    - ✅ **Memory Efficient**: Process content in manageable chunks
+    - ✅ **Multilanguage Native**: Built-in support for translations and language groups
+    - ✅ **Individual Story Architecture**: Full v4.0 support with language-specific IDs
+    
+  version: 4.0.0
+  contact:
+    name: Neutale API Support
+    email: support@neutale.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: https://audiobook-dev.sunny250486.workers.dev
+    description: Development environment
+  - url: https://audiobook-prod.sunny250486.workers.dev
+    description: Production environment
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  # Progressive Upload System
+  /api/progressive-upload/init:
+    post:
+      tags:
+        - Progressive Upload
+      summary: Initialize story upload
+      description: |
+        Creates a new story record with metadata and asset manifest.
+        
+        **Individual Story Architecture v4.0:**
+        - Creates language-specific story ID if language specified
+        - Sets up language_group_id for translation linking
+        - Supports chapters manifest for structured content
+        
+        **Multilanguage Support:**
+        - **Master Story**: Use `is_master: true` for original language version
+        - **Translation**: Use same `language_group_id` with different `language`
+        - **Quality Tracking**: Set `translation_quality` score (0-100)
+        
+      operationId: initializeUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - author
+                - language
+              properties:
+                title:
+                  type: string
+                  description: Story title in native language
+                  example: "Sabores del Futuro Revelados"
+                author:
+                  type: string
+                  description: Story author
+                  example: "AI Story Weaver"
+                description:
+                  type: string
+                  description: Story description in native language
+                  example: "Una aventura culinaria futurista"
+                genre:
+                  type: string
+                  description: Story genre
+                  example: "Fantasy"
+                language:
+                  type: string
+                  pattern: '^[a-z]{2}$'
+                  description: ISO 639-1 language code (creates language-specific story ID)
+                  example: "es"
+                language_group_id:
+                  type: string
+                  description: |
+                    Group ID for linking translations. 
+                    - **New story**: Auto-generated from title
+                    - **Translation**: Use existing master's group ID
+                  example: "future-flavors-unveiled"
+                is_master:
+                  type: boolean
+                  description: Whether this is the master/original version
+                  default: false
+                master_story_id:
+                  type: string
+                  description: ID of the master story (for translations)
+                  example: "future-flavors-unveiled"
+                translation_quality:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  description: Translation quality score (100 = original/perfect)
+                  default: 100
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Story tags
+                  example: ["sci-fi", "culinary", "adventure"]
+                expected_chapters:
+                  type: integer
+                  description: Expected number of chapters (for progress tracking)
+                  example: 12
+                expected_assets:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      filename:
+                        type: string
+                        example: "cover.jpg"
+                      type:
+                        type: string
+                        enum: [image, audio, document]
+                        example: "image"
+                      chapter_id:
+                        type: string
+                        description: Associated chapter ID (for chapter-specific assets)
+                        example: "chapter_01"
+                      is_shared:
+                        type: boolean
+                        description: Whether asset is shared across languages
+                        default: false
+      responses:
+        '201':
+          description: Upload initialized successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  story_id:
+                    type: string
+                    description: Generated language-specific story ID (v4.0)
+                    example: "future-flavors-unveiled-es"
+                  language_group_id:
+                    type: string
+                    example: "future-flavors-unveiled"
+                  upload_session_id:
+                    type: string
+                    description: Session ID for tracking upload progress
+                    example: "upload_session_abc123"
+                  architecture:
+                    type: string
+                    example: "individual-v4.0"
+                  next_steps:
+                    type: array
+                    items:
+                      type: string
+                    example: ["upload-content", "upload-assets", "finalize"]
+                  upload_urls:
+                    type: object
+                    description: Pre-signed URLs for asset uploads (optional optimization)
+                    properties:
+                      content_upload:
+                        type: string
+                      asset_upload:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Story already exists
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      existing_story:
+                        type: object
+                        properties:
+                          story_id:
+                            type: string
+                          language:
+                            type: string
+                          status:
+                            type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/progressive-upload/upload-content:
+    post:
+      tags:
+        - Progressive Upload
+      summary: Upload story content
+      description: |
+        Uploads structured content blocks by chapter.
+        
+        **Content Blocks Architecture:**
+        - Supports mixed content types: text, images, audio, quotes
+        - Chapter-based organization with automatic validation
+        - **Language-Aware**: Content stored with language context
+        - **Progress Tracking**: Each chapter upload tracked individually
+        
+        **File Size Solution:**
+        - Upload one chapter at a time (no size limits per chapter)
+        - Validate content structure before storage
+        - Resume from any chapter if upload fails
+        
+      operationId: uploadContent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - story_id
+                - chapter_id
+                - content_blocks
+              properties:
+                story_id:
+                  type: string
+                  description: Language-specific story ID from initialization
+                  example: "future-flavors-unveiled-es"
+                upload_session_id:
+                  type: string
+                  description: Session ID from initialization (optional)
+                  example: "upload_session_abc123"
+                chapter_id:
+                  type: string
+                  description: Unique chapter identifier
+                  example: "chapter_01"
+                chapter_number:
+                  type: integer
+                  description: Chapter sequence number
+                  example: 1
+                chapter_title:
+                  type: string
+                  description: Chapter title in story language
+                  example: "El Despertar Culinario"
+                content_blocks:
+                  type: array
+                  description: Array of content blocks making up the chapter
+                  items:
+                    $ref: '#/components/schemas/ContentBlock'
+                metadata:
+                  type: object
+                  description: Chapter-level metadata
+                  properties:
+                    word_count:
+                      type: integer
+                      example: 1250
+                    reading_time:
+                      type: integer
+                      description: Estimated reading time in minutes
+                      example: 5
+                    summary:
+                      type: string
+                      description: Chapter summary
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                validate_content:
+                  type: boolean
+                  default: true
+                  description: Whether to validate content structure
+      responses:
+        '200':
+          description: Content uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  chapter_id:
+                    type: string
+                    example: "chapter_01"
+                  blocks_processed:
+                    type: integer
+                    example: 8
+                  r2_key:
+                    type: string
+                    description: R2 storage key for the chapter
+                    example: "stories/future-flavors-unveiled/es/chapters/chapter_01.json"
+                  validation_results:
+                    type: object
+                    properties:
+                      content_valid:
+                        type: boolean
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+                      asset_references:
+                        type: array
+                        description: Asset filenames referenced in content
+                        items:
+                          type: string
+                  upload_progress:
+                    type: object
+                    properties:
+                      chapters_uploaded:
+                        type: integer
+                      total_expected:
+                        type: integer
+                      completion_percentage:
+                        type: number
+        '400':
+          description: Invalid content or validation failed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      validation_errors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            block_index:
+                              type: integer
+                            error_type:
+                              type: string
+                            message:
+                              type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Story or upload session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/progressive-upload/upload-asset:
+    post:
+      tags:
+        - Progressive Upload
+      summary: Upload story assets
+      description: |
+        Uploads images, audio files, and other media assets individually.
+        
+        **Asset Storage Strategy:**
+        - **Language-Specific**: Assets stored per language version by default
+        - **Shared Assets**: Option to share assets across language versions
+        - **Chapter Association**: Link assets to specific chapters
+        - **Automatic Optimization**: Image compression and audio validation
+        
+        **File Size Solution:**
+        - Upload one asset at a time (max 50MB per asset)
+        - Support for large audio files with validation
+        - Progress tracking per asset
+        
+      operationId: uploadAsset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - story_id
+                - file
+                - asset_type
+              properties:
+                story_id:
+                  type: string
+                  description: Language-specific story ID (v4.0)
+                  example: "future-flavors-unveiled-es"
+                upload_session_id:
+                  type: string
+                  description: Session ID from initialization (optional)
+                  example: "upload_session_abc123"
+                file:
+                  type: string
+                  format: binary
+                  description: Asset file to upload (max 50MB per file)
+                asset_type:
+                  type: string
+                  enum: [image, audio, document]
+                  example: "image"
+                filename:
+                  type: string
+                  description: Custom filename (optional, will use original if not provided)
+                  example: "cover.jpg"
+                chapter_id:
+                  type: string
+                  description: Associated chapter (for chapter-specific assets)
+                  example: "chapter_01"
+                is_shared:
+                  type: boolean
+                  default: false
+                  description: |
+                    Whether this asset is shared across all language versions.
+                    - `true`: Stored in shared location, accessible by all translations
+                    - `false`: Stored per language version
+                language_specific:
+                  type: boolean
+                  default: true
+                  description: Whether this asset needs language-specific versions
+                asset_purpose:
+                  type: string
+                  enum: [cover, thumbnail, chapter_illustration, chapter_audio, background, other]
+                  description: Purpose of the asset for proper categorization
+                  example: "cover"
+                metadata:
+                  type: string
+                  description: JSON string with additional metadata
+                  example: '{"alt_text": "Story cover image", "width": 800, "height": 600, "language": "es"}'
+                optimize:
+                  type: boolean
+                  default: true
+                  description: Whether to optimize the asset (compression, etc.)
+      responses:
+        '200':
+          description: Asset uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  asset_id:
+                    type: string
+                    example: "asset_cover_jpg"
+                  filename:
+                    type: string
+                    example: "cover.jpg"
+                  r2_key:
+                    type: string
+                    description: R2 storage path
+                    example: "stories/future-flavors-unveiled/es/assets/images/cover.jpg"
+                  asset_url:
+                    type: string
+                    description: Public URL for accessing the asset
+                    example: "/api/content/future-flavors-unveiled-es/assets/cover.jpg"
+                  file_size:
+                    type: integer
+                    description: File size in bytes
+                    example: 245760
+                  content_type:
+                    type: string
+                    example: "image/jpeg"
+                  optimization_results:
+                    type: object
+                    nullable: true
+                    properties:
+                      original_size:
+                        type: integer
+                      optimized_size:
+                        type: integer
+                      compression_ratio:
+                        type: number
+                  upload_progress:
+                    type: object
+                    properties:
+                      assets_uploaded:
+                        type: integer
+                      total_expected:
+                        type: integer
+                      completion_percentage:
+                        type: number
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      file_size:
+                        type: integer
+                        description: Actual file size in bytes
+                      max_size:
+                        type: integer
+                        description: Maximum allowed size in bytes
+                        example: 52428800
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      supported_types:
+                        type: array
+                        items:
+                          type: string
+                        example: ["image/jpeg", "image/png", "audio/mpeg", "audio/wav"]
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/progressive-upload/finalize:
+    post:
+      tags:
+        - Progressive Upload
+      summary: Finalize story upload
+      description: |
+        Completes the upload process and publishes the story.
+        
+        **Finalization Process:**
+        - Validates all uploaded content and assets
+        - Generates complete chapters manifest
+        - Updates story metadata with statistics
+        - **Language Group Management**: Links translations properly
+        - Sets story status to 'published' or specified status
+        
+        **Individual Story Architecture v4.0:**
+        - Creates language-specific chapters manifest
+        - Updates translation relationships
+        - Validates language group consistency
+        
+      operationId: finalizeUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - story_id
+              properties:
+                story_id:
+                  type: string
+                  description: Language-specific story ID
+                  example: "future-flavors-unveiled-es"
+                upload_session_id:
+                  type: string
+                  description: Session ID from initialization (optional)
+                  example: "upload_session_abc123"
+                status:
+                  type: string
+                  enum: [published, draft, review]
+                  default: published
+                  description: Final story status
+                validation_level:
+                  type: string
+                  enum: [strict, normal, permissive]
+                  default: normal
+                  description: Content validation strictness
+                generate_thumbnails:
+                  type: boolean
+                  default: true
+                  description: Whether to generate missing thumbnails
+                metadata_updates:
+                  type: object
+                  description: Final metadata updates
+                  properties:
+                    cover_image_url:
+                      type: string
+                      example: "/api/content/future-flavors-unveiled-es/assets/cover.jpg"
+                    thumbnail_url:
+                      type: string
+                      example: "/api/content/future-flavors-unveiled-es/assets/thumbnail.jpg"
+                    reading_time:
+                      type: integer
+                      description: Total estimated reading time in minutes
+                      example: 65
+                    total_chapters:
+                      type: integer
+                      description: Final chapter count
+                    content_statistics:
+                      type: object
+                      properties:
+                        total_words:
+                          type: integer
+                        total_blocks:
+                          type: integer
+                        audio_duration:
+                          type: integer
+                          description: Total audio duration in seconds
+                publish_immediately:
+                  type: boolean
+                  default: true
+                  description: Whether to publish immediately or keep as draft
+      responses:
+        '200':
+          description: Upload finalized successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  story_id:
+                    type: string
+                    example: "future-flavors-unveiled-es"
+                  language:
+                    type: string
+                    example: "es"
+                  status:
+                    type: string
+                    example: "published"
+                  upload_summary:
+                    type: object
+                    properties:
+                      total_chapters:
+                        type: integer
+                        example: 12
+                      total_assets:
+                        type: integer
+                        example: 15
+                      content_blocks:
+                        type: integer
+                        example: 84
+                      upload_duration:
+                        type: string
+                        example: "8m 32s"
+                  chapters_manifest:
+                    type: array
+                    description: Generated chapters manifest for the story
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          example: "chapter_01"
+                        title:
+                          type: string
+                          example: "El Despertar Culinario"
+                        chapterNumber:
+                          type: integer
+                          example: 1
+                        duration:
+                          type: integer
+                          description: Audio duration in seconds
+                          example: 320
+                        audioUrl:
+                          type: string
+                          example: "/api/content/future-flavors-unveiled-es/audio/chapter_01.mp3"
+                        contentUrl:
+                          type: string
+                          example: "/api/chapters/future-flavors-unveiled-es/chapter_01/content"
+                  language_group:
+                    type: object
+                    description: Language group information
+                    properties:
+                      language_group_id:
+                        type: string
+                        example: "future-flavors-unveiled"
+                      total_translations:
+                        type: integer
+                        example: 3
+                      available_languages:
+                        type: array
+                        items:
+                          type: string
+                        example: ["en", "es", "fr"]
+                      master_story_id:
+                        type: string
+                        example: "future-flavors-unveiled"
+                  api_endpoints:
+                    type: object
+                    description: Generated API endpoints for the story
+                    properties:
+                      story_url:
+                        type: string
+                        example: "/api/stories/future-flavors-unveiled-es"
+                      content_url:
+                        type: string
+                        example: "/api/content/future-flavors-unveiled-es/es/metadata"
+                      translations_url:
+                        type: string
+                        example: "/api/stories/group/future-flavors-unveiled"
+                  validation_results:
+                    type: object
+                    properties:
+                      content_validation:
+                        type: string
+                        enum: [passed, warning, failed]
+                        example: "passed"
+                      asset_validation:
+                        type: string
+                        enum: [passed, warning, failed]
+                        example: "passed"
+                      missing_assets:
+                        type: array
+                        items:
+                          type: string
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+        '400':
+          description: Validation failed or incomplete upload
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      validation_errors:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                              enum: [missing_content, missing_asset, invalid_chapter, metadata_issue]
+                            severity:
+                              type: string
+                              enum: [error, warning]
+                            message:
+                              type: string
+                            chapter_id:
+                              type: string
+                              nullable: true
+                      upload_status:
+                        type: object
+                        properties:
+                          chapters_uploaded:
+                            type: integer
+                          expected_chapters:
+                            type: integer
+                          assets_uploaded:
+                            type: integer
+                          expected_assets:
+                            type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Story or upload session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # Upload Management & Utilities
+  /api/progressive-upload/status/{upload_session_id}:
+    get:
+      tags:
+        - Upload Management
+      summary: Get upload progress status
+      description: |
+        Retrieve current status of an ongoing upload session.
+        
+        **Progress Tracking:**
+        - Chapters uploaded vs expected
+        - Assets uploaded vs expected  
+        - Current upload phase
+        - Time estimates and performance metrics
+        
+      operationId: getUploadStatus
+      parameters:
+        - name: upload_session_id
+          in: path
+          required: true
+          description: Upload session ID from initialization
+          schema:
+            type: string
+            example: "upload_session_abc123"
+      responses:
+        '200':
+          description: Upload status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  upload_session_id:
+                    type: string
+                    example: "upload_session_abc123"
+                  story_id:
+                    type: string
+                    example: "future-flavors-unveiled-es"
+                  status:
+                    type: string
+                    enum: [initialized, uploading_content, uploading_assets, finalizing, completed, failed]
+                    example: "uploading_content"
+                  progress:
+                    type: object
+                    properties:
+                      overall_percentage:
+                        type: number
+                        example: 65.5
+                      chapters:
+                        type: object
+                        properties:
+                          uploaded:
+                            type: integer
+                            example: 8
+                          expected:
+                            type: integer
+                            example: 12
+                          percentage:
+                            type: number
+                            example: 66.7
+                      assets:
+                        type: object
+                        properties:
+                          uploaded:
+                            type: integer
+                            example: 10
+                          expected:
+                            type: integer
+                            example: 15
+                          percentage:
+                            type: number
+                            example: 66.7
+                  time_metrics:
+                    type: object
+                    properties:
+                      started_at:
+                        type: string
+                        format: date-time
+                      last_activity:
+                        type: string
+                        format: date-time
+                      estimated_completion:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      elapsed_time:
+                        type: string
+                        example: "5m 23s"
+                  next_steps:
+                    type: array
+                    items:
+                      type: string
+                    example: ["upload chapter_09", "upload chapter_10", "upload remaining assets"]
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        type:
+                          type: string
+                        message:
+                          type: string
+                        recoverable:
+                          type: boolean
+        '404':
+          description: Upload session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/progressive-upload/resume/{upload_session_id}:
+    post:
+      tags:
+        - Upload Management
+      summary: Resume failed upload
+      description: |
+        Resume an upload session that was interrupted or failed.
+        
+        **Resume Capabilities:**
+        - Detect what content/assets are missing
+        - Skip already uploaded items
+        - Provide recovery recommendations
+        - Continue from last successful step
+        
+      operationId: resumeUpload
+      parameters:
+        - name: upload_session_id
+          in: path
+          required: true
+          description: Upload session ID to resume
+          schema:
+            type: string
+            example: "upload_session_abc123"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force_resume:
+                  type: boolean
+                  default: false
+                  description: Force resume even if session appears corrupted
+                reset_errors:
+                  type: boolean
+                  default: true
+                  description: Clear previous error states
+                validation_level:
+                  type: string
+                  enum: [strict, normal, permissive]
+                  default: normal
+                  description: Validation level for resumed content
+      responses:
+        '200':
+          description: Upload session resumed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  upload_session_id:
+                    type: string
+                    example: "upload_session_abc123"
+                  resume_status:
+                    type: object
+                    properties:
+                      missing_chapters:
+                        type: array
+                        items:
+                          type: string
+                        example: ["chapter_09", "chapter_10", "chapter_11", "chapter_12"]
+                      missing_assets:
+                        type: array
+                        items:
+                          type: string
+                        example: ["chapter_09_audio.mp3", "illustration_03.jpg"]
+                      errors_cleared:
+                        type: integer
+                        example: 3
+                  next_steps:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Upload missing chapters", "Upload missing assets", "Run finalization"]
+                  recommendations:
+                    type: array
+                    items:
+                      type: string
+                    example: ["Consider reducing asset file sizes", "Upload during off-peak hours"]
+        '400':
+          description: Cannot resume upload session
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - type: object
+                    properties:
+                      resume_issues:
+                        type: array
+                        items:
+                          type: string
+                      session_status:
+                        type: string
+        '404':
+          description: Upload session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  schemas:
+    ContentBlock:
+      type: object
+      required:
+        - type
+        - content
+      properties:
+        type:
+          type: string
+          enum: [text, heading, image, audio, quote, separator, code]
+          description: Type of content block
+        content:
+          type: string
+          description: Block content (text, image filename, audio filename, etc.)
+        metadata:
+          type: object
+          description: Additional metadata specific to block type
+          properties:
+            style:
+              type: string
+              description: CSS class or style information
+            alt_text:
+              type: string
+              description: Alt text for images (required for accessibility)
+            duration:
+              type: integer
+              description: Duration in seconds for audio blocks
+            attribution:
+              type: string
+              description: Attribution for quotes
+            language:
+              type: string
+              description: Language code for this specific block
+            asset_reference:
+              type: string
+              description: Reference to uploaded asset filename
+    
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Invalid request parameters"
+            details:
+              type: object
+              description: Additional error details
+            timestamp:
+              type: string
+              format: date-time
+            request_id:
+              type: string
+              nullable: true
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters or validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: Unauthorized - invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Bearer token obtained from authentication
+    
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for automated systems and StoryGen integration
+
+tags:
+  - name: Progressive Upload
+    description: Step-by-step story upload system with multilanguage support
+  - name: Upload Management
+    description: Upload session management, progress tracking, and recovery
