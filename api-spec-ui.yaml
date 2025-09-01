@@ -111,10 +111,23 @@ paths:
             example: "sabores futuro"
         - name: genre
           in: query
-          description: Filter by genre
+          description: Filter by genre (use genre ID from /genres endpoint)
           schema:
             type: string
-            example: "Fantasy"
+            enum: 
+              - "fantasy"
+              - "adventure"
+              - "mystery"
+              - "sci-fi"
+              - "romance"
+              - "thriller"
+              - "horror"
+              - "historical"
+              - "comedy"
+              - "drama"
+              - "action"
+              - "children"
+            example: "fantasy"
         - name: author
           in: query
           description: Filter by author
@@ -211,6 +224,19 @@ paths:
                           genre:
                             type: string
                             nullable: true
+                            enum: 
+                              - "fantasy"
+                              - "adventure"
+                              - "mystery"
+                              - "sci-fi"
+                              - "romance"
+                              - "thriller"
+                              - "horror"
+                              - "historical"
+                              - "comedy"
+                              - "drama"
+                              - "action"
+                              - "children"
                           featured:
                             type: boolean
                             nullable: true
@@ -1159,11 +1185,13 @@ paths:
       tags:
         - Metadata
       summary: Get available genres
-      description: Get list of all available story genres
+      description: |
+        Get comprehensive list of all supported story genres with metadata.
+        Returns centralized genre definitions with UI hints, descriptions, and audience targeting.
       operationId: getGenres
       responses:
         '200':
-          description: Genres list
+          description: Genres list with metadata
           content:
             application/json:
               schema:
@@ -1172,8 +1200,42 @@ paths:
                   genres:
                     type: array
                     items:
-                      type: string
-                    example: ["Fantasy", "Sci-Fi", "Romance", "Mystery"]
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Unique genre identifier
+                          example: "fantasy"
+                        name:
+                          type: string
+                          description: Display name for UI
+                          example: "Fantasy"
+                        description:
+                          type: string
+                          description: Brief description for UI tooltips
+                          example: "Stories with magical elements, mythical creatures, and imaginary worlds"
+                        emoji:
+                          type: string
+                          description: Emoji icon for visual representation
+                          example: "🐉"
+                        audience:
+                          type: string
+                          enum: ["general", "young-adult", "adult", "children"]
+                          description: Target audience indicator
+                          example: "general"
+                        colorHint:
+                          type: string
+                          enum: ["primary", "secondary", "accent", "warm", "cool", "dark"]
+                          description: Color scheme hint for UI theming
+                          example: "primary"
+                  defaultGenre:
+                    type: string
+                    description: Default genre for new stories
+                    example: "adventure"
+                  totalCount:
+                    type: integer
+                    description: Total number of supported genres
+                    example: 12
 
   /api/stories/languages:
     get:
@@ -1251,7 +1313,21 @@ components:
           example: "Una aventura culinaria futurista"
         genre:
           type: string
-          example: "Fantasy"
+          description: Story genre identifier
+          enum: 
+            - "fantasy"
+            - "adventure"
+            - "mystery"
+            - "sci-fi"
+            - "romance"
+            - "thriller"
+            - "horror"
+            - "historical"
+            - "comedy"
+            - "drama"
+            - "action"
+            - "children"
+          example: "fantasy"
         language:
           type: string
           example: "es"
@@ -1262,7 +1338,7 @@ components:
           type: array
           items:
             type: string
-          example: ["en", "es", "fr"]
+          example: ["en", "es", "fr", "de", "zh", "hi", "pt", "ru", "ja", "ko", "ar", "id"]
         languageGroupId:
           type: string
           example: "future-flavors-unveiled"

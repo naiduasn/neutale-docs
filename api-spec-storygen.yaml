@@ -106,8 +106,22 @@ paths:
                   example: "Una aventura culinaria futurista"
                 genre:
                   type: string
-                  description: Story genre
-                  example: "Fantasy"
+                  description: |
+                    Story genre from supported list. Supports content-based auto-detection if not provided.
+                  enum: 
+                    - "fantasy"
+                    - "adventure"
+                    - "mystery"
+                    - "sci-fi"
+                    - "romance"
+                    - "thriller"
+                    - "horror"
+                    - "historical"
+                    - "comedy"
+                    - "drama"
+                    - "action"
+                    - "children"
+                  example: "fantasy"
                 language:
                   type: string
                   pattern: '^[a-z]{2}$'
@@ -704,7 +718,7 @@ paths:
                         type: array
                         items:
                           type: string
-                        example: ["en", "es", "fr"]
+                        example: ["en", "es", "fr", "de", "zh", "hi", "pt", "ru", "ja", "ko", "ar", "id"]
                       master_story_id:
                         type: string
                         example: "future-flavors-unveiled"
