@@ -1023,34 +1023,21 @@ paths:
               schema:
                 type: object
                 properties:
-                  query:
-                    type: string
-                  results:
+                  success:
+                    type: boolean
+                    example: true
+                  stories:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        type:
-                          type: string
-                          enum: [story, author, chapter]
-                        id:
-                          type: string
-                        title:
-                          type: string
-                        description:
-                          type: string
-                        language:
-                          type: string
-                        relevance_score:
-                          type: number
-                        highlight:
-                          type: string
-                          description: Highlighted match text
+                      $ref: '#/components/schemas/Story'
                   total:
                     type: integer
-                  searchTime:
+                  query:
                     type: string
-                    example: "0.045s"
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '400':
           $ref: '#/components/responses/BadRequest'
         '500':
@@ -1366,9 +1353,9 @@ components:
           items:
             type: string
           example: ["sci-fi", "culinary", "adventure"]
-        status:
+        masterStoryId:
           type: string
-          example: "published"
+          description: ID of the master/original story in the language group
         length:
           type: string
           enum: [short, medium, long]
