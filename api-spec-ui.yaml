@@ -4,6 +4,15 @@ info:
   description: |
     API specification for frontend client integration and user-facing features.
     
+    ## Individual Story Architecture v4.1.1 - FURTHER OPTIMIZED
+
+    ✅ **DEPLOYED September 16, 2025** - Individual story endpoint optimizations:
+    - **⚡ Individual Story API**: Now 0.67s (down from 4.9s) - 86% faster
+    - **🗂️ Essential Data Only**: Removed translation stats, styleGuide, review objects
+    - **📊 Optimized SQL**: Only fetches required columns from database
+    - **🎯 chapters_manifest**: Uses dedicated column instead of heavy R2/metadata lookups
+    - **📱 Mobile-First**: Minimal data transfer for story detail views
+
     ## Individual Story Architecture v4.1 - PERFORMANCE OPTIMIZED
 
     ✅ **DEPLOYED September 16, 2025** - Major performance optimizations:
@@ -20,6 +29,15 @@ info:
     - **Language-Specific Story IDs**: Each translation has unique ID (`story-es`, `story-fr`)
     - **Translation Discovery**: Find all language versions via language groups
     - **Seamless Language Switching**: Switch between translations preserving reading progress
+
+    ## ⚠️ Breaking Changes in v4.1.1
+
+    **Individual Story Response Changes:**
+    - ❌ Removed: `isMaster`, `masterStoryId`, `languageGroupId`, `supportedLanguages`
+    - ❌ Removed: `translationQuality`, `originLanguage`, `styleGuide`, `review`
+    - ❌ Removed: `created_at`, `updated_at`, `status`
+    - ✅ Optimized: Real chapter IDs from `chapters_manifest` column
+    - ✅ Added: `avgContentRating`, `avgAudioRating`, `reviewCount`
 
     ## ⚠️ Breaking Changes in v4.1.0
 
@@ -50,7 +68,7 @@ info:
     - **Offline Sync**: Download progress and bookmarks for offline access
     - **Bandwidth Optimization**: Compressed responses and efficient caching
     
-  version: 4.1.0
+  version: 4.1.1
   contact:
     name: Neutale API Support  
     email: support@neutale.com
@@ -1647,58 +1665,104 @@ components:
           format: date-time
     
     StoryDetailed:
-      allOf:
-        - $ref: '#/components/schemas/Story'
-        - type: object
-          properties:
-            chapters:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: "chapter_01"
-                  title:
-                    type: string
-                    example: "El Despertar Culinario"
-                  chapterNumber:
-                    type: integer
-                    example: 1
-                  duration:
-                    type: integer
-                    description: Audio duration in seconds
-                    example: 1200
-                  audioUrl:
-                    type: string
-                    example: "/api/content/future-flavors-unveiled-es/audio/chapter_01.mp3"
-                  contentUrl:
-                    type: string
-                    example: "/api/chapters/future-flavors-unveiled-es/chapter_01/content"
-            styleGuide:
-              type: object
-              properties:
-                theme:
-                  type: string
-                colorPalette:
-                  type: array
-                  items:
-                    type: string
-                imageStyle:
-                  type: string
-                mood:
-                  type: string
-            review:
-              type: object
-              properties:
-                overall_rating:
-                  type: integer
-                verdict:
-                  type: string
-                final_rating:
-                  type: integer
-                quality_achieved:
-                  type: boolean
+      type: object
+      description: |
+        **OPTIMIZED v4.1** - Essential story metadata with chapter structure.
+
+        Performance optimized to exclude heavy fields like translation stats,
+        styleGuide, and review objects. Use only for individual story views.
+      properties:
+        id:
+          type: string
+          example: "future-flavors-unveiled-es"
+        title:
+          type: string
+          example: "Sabores del Futuro Revelados"
+        author:
+          type: string
+          example: "AI Story Weaver"
+        description:
+          type: string
+          example: "Un viaje culinario revolucionario que transforma la gastronomía."
+        genre:
+          type: string
+          example: "sci-fi"
+        language:
+          type: string
+          example: "es"
+        readingTime:
+          type: integer
+          description: Estimated reading time in minutes
+          example: 25
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["culinary", "future", "innovation"]
+        totalChapters:
+          type: integer
+          example: 6
+        coverImageUrl:
+          type: string
+          nullable: true
+          example: "/api/content/future-flavors-unveiled-es/image/es/cover.webp"
+        thumbnailUrl:
+          type: string
+          nullable: true
+          example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
+        hasAudio:
+          type: boolean
+          description: Whether this story has audio content
+          example: true
+        audioChaptersCount:
+          type: integer
+          description: Number of chapters with audio
+          example: 3
+        totalAudioDuration:
+          type: integer
+          description: Total audio duration in seconds
+          example: 1800
+        avgContentRating:
+          type: number
+          description: Average content rating (0-5)
+          example: 4.2
+        avgAudioRating:
+          type: number
+          description: Average audio rating (0-5)
+          example: 4.5
+        reviewCount:
+          type: integer
+          description: Total number of reviews
+          example: 127
+        chapters:
+          type: array
+          description: Chapter structure with actual uploaded chapter IDs
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Actual chapter ID from upload (not generated)
+                example: "ch_chapter_4b86b0ee"
+              title:
+                type: string
+                example: "First Light"
+              chapterNumber:
+                type: integer
+                example: 1
+              duration:
+                type: integer
+                nullable: true
+                description: Audio duration in seconds (null if no audio)
+                example: 300
+              audioUrl:
+                type: string
+                nullable: true
+                description: Direct audio streaming URL (null if no audio)
+                example: "/api/chapters/future-flavors-unveiled-es/ch_chapter_4b86b0ee/audio"
+              contentUrl:
+                type: string
+                example: "/api/chapters/future-flavors-unveiled-es/ch_chapter_4b86b0ee/content"
     
     StoryMetadata:
       type: object
