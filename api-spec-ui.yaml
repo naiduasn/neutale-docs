@@ -1075,10 +1075,10 @@ paths:
                       language:
                         type: string
                         example: "es"
-                      coverImageUrl:
+                      thumbnailUrl:
                         type: string
                         nullable: true
-                        example: "/api/content/future-flavors-unveiled-es/image/es/cover.webp"
+                        example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
                       hasAudio:
                         type: boolean
                         example: false
@@ -1187,7 +1187,7 @@ paths:
                         type: string
                       language:
                         type: string
-                      coverImageUrl:
+                      thumbnailUrl:
                         type: string
                         nullable: true
                       hasAudio:
@@ -1323,10 +1323,10 @@ paths:
                         language:
                           type: string
                           example: "es"
-                        coverImageUrl:
+                        thumbnailUrl:
                           type: string
                           nullable: true
-                          example: "/api/content/future-flavors-unveiled-es/image/es/cover.webp"
+                          example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
                         hasAudio:
                           type: boolean
                           example: false
@@ -1622,10 +1622,10 @@ components:
         language:
           type: string
           example: "es"
-        coverImageUrl:
+        thumbnailUrl:
           type: string
           nullable: true
-          example: "/api/content/future-flavors-unveiled-es/image/es/cover.webp"
+          example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
         hasAudio:
           type: boolean
           description: Whether this story has audio content
