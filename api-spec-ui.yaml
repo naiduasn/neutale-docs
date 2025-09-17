@@ -1,1972 +1,1463 @@
 openapi: 3.0.3
 info:
   title: Neutale Audiobook Platform - UI/Frontend API
-  description: |
-    API specification for frontend client integration and user-facing features.
-    
-    ## Individual Story Architecture v4.1.1 - FURTHER OPTIMIZED
-
-    ✅ **DEPLOYED September 16, 2025** - Individual story endpoint optimizations:
-    - **⚡ Individual Story API**: Now 0.67s (down from 4.9s) - 86% faster
-    - **🗂️ Essential Data Only**: Removed translation stats, styleGuide, review objects
-    - **📊 Optimized SQL**: Only fetches required columns from database
-    - **🎯 chapters_manifest**: Uses dedicated column instead of heavy R2/metadata lookups
-    - **📱 Mobile-First**: Minimal data transfer for story detail views
-
-    ## Individual Story Architecture v4.1 - PERFORMANCE OPTIMIZED
-
-    ✅ **DEPLOYED September 16, 2025** - Major performance optimizations:
-    - **⚡ 86% Faster API Response Times**: Stories API now under 1 second (was 4.9s)
-    - **🎯 Optimized List Views**: Minimal essential fields only for browsing
-    - **🔍 Smart Pagination**: Uses `hasMore` instead of expensive count queries
-    - **📱 Mobile-First**: Reduced data transfer and battery usage
-    - **🚀 Database Indexes**: Optimized for common search and filter patterns
-
-    ## Individual Story Architecture v4.0 - CORE FEATURES
-
-    ✅ **STABLE since September 13, 2025** - Core language architecture:
-    - **Native Language Display**: Users see titles in their native language
-    - **Language-Specific Story IDs**: Each translation has unique ID (`story-es`, `story-fr`)
-    - **Translation Discovery**: Find all language versions via language groups
-    - **Seamless Language Switching**: Switch between translations preserving reading progress
-
-    ## ⚠️ Breaking Changes in v4.1.1
-
-    **Individual Story Response Changes:**
-    - ❌ Removed: `isMaster`, `masterStoryId`, `languageGroupId`, `supportedLanguages`
-    - ❌ Removed: `translationQuality`, `originLanguage`, `styleGuide`, `review`
-    - ❌ Removed: `created_at`, `updated_at`, `status`
-    - ✅ Optimized: Real chapter IDs from `chapters_manifest` column
-    - ✅ Added: `avgContentRating`, `avgAudioRating`, `reviewCount`
-
-    ## ⚠️ Breaking Changes in v4.1.0
-
-    **Stories List Response Changes:**
-    - ❌ Removed: `total`, `totalPages`, `hasNext` → ✅ Added: `count`, `hasMore`
-    - ❌ Removed: `description`, `tags`, `supportedLanguages`, `originLanguage`, etc.
-    - ✅ Added: `hasAudio`, `audioChaptersCount`, `totalAudioDuration`
-    - 📝 Use individual story endpoint for complete metadata when needed
-    
-    ## Key Features
-    
-    - **Story Discovery & Search**: Browse, filter, and search stories by language, genre, author
-    - **Content Delivery**: Chapter-based audio and text streaming optimized for mobile
-    - **User Tracking**: Reading progress, bookmarks, library management, and cross-device sync
-    - **Subscription & Billing**: Premium features with Dodo Payments integration
-    - **Reviews & Feedback**: Community ratings and review system
-    
-    ## Authentication
-    
-    Most endpoints require Auth0 JWT tokens:
-    ```
-    Authorization: Bearer <jwt-token>
-    ```
-    
-    ## Mobile Optimization
-    
-    - **Range Requests**: Audio streaming supports byte-range requests for progressive loading
-    - **Offline Sync**: Download progress and bookmarks for offline access
-    - **Bandwidth Optimization**: Compressed responses and efficient caching
-    
+  description: API specification for frontend client integration and user-facing features.
   version: 4.1.1
   contact:
-    name: Neutale API Support  
+    name: Neutale API Support
     email: support@neutale.com
   license:
     name: Proprietary
-
 servers:
   - url: https://audiobook-dev.sunny250486.workers.dev
     description: Development environment
   - url: https://audiobook-prod.sunny250486.workers.dev
     description: Production environment
-
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Health status of the API
+          example: ok
+        timestamp:
+          type: string
+          description: ISO 8601 timestamp of the health check
+          example: 2025-09-16T12:00:00.000Z
+        version:
+          type: string
+          description: Current API version
+          example: 4.1.1
+        environment:
+          type: string
+          description: Current environment (development, production, etc.)
+          example: development
+      required:
+        - status
+        - timestamp
+        - version
+    Story:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique story identifier
+          example: story_abc123
+        title:
+          type: string
+          description: Story title
+          example: The Adventure Begins
+        author:
+          type: string
+          description: Author name
+          example: Jane Doe
+        description:
+          type: string
+          description: Story description
+          example: An exciting tale of adventure and discovery
+        genre:
+          type: string
+          description: Story genre
+          example: Fantasy
+        origin_language:
+          type: string
+          description: Original language code
+          example: en
+        total_chapters:
+          type: integer
+          description: Total number of chapters
+          example: 12
+        reading_time:
+          type: integer
+          description: Estimated reading time in minutes
+          example: 180
+        status:
+          type: string
+          enum:
+            - draft
+            - published
+            - archived
+          description: Story publication status
+          example: published
+        cover_image_url:
+          type: string
+          format: uri
+          description: Cover image URL
+          example: https://example.com/cover.jpg
+        thumbnail_url:
+          type: string
+          format: uri
+          description: Thumbnail image URL
+          example: https://example.com/thumb.jpg
+        created_at:
+          type: number
+          description: Creation timestamp
+          example: 1634567890
+        updated_at:
+          type: number
+          description: Last update timestamp
+          example: 1634567890
+        avg_content_rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          description: Average content rating (1-5)
+          example: 4.2
+        avg_audio_rating:
+          type: number
+          minimum: 1
+          maximum: 5
+          description: Average audio rating (1-5)
+          example: 4.5
+        review_count:
+          type: integer
+          description: Number of reviews
+          example: 42
+        language_group_id:
+          type: string
+          description: Language group identifier for translations
+          example: group_xyz789
+        language:
+          type: string
+          description: Current story language
+          example: en
+        is_master:
+          type: integer
+          minimum: 0
+          maximum: 1
+          description: Whether this is the master language version (1=yes, 0=no)
+          example: 1
+        has_audio:
+          type: boolean
+          description: Whether the story has audio available
+          example: true
+        audio_chapters_count:
+          type: integer
+          description: Number of chapters with audio
+          example: 8
+        total_audio_duration:
+          type: number
+          description: Total audio duration in seconds
+          example: 3600
+      required:
+        - id
+        - title
+        - language
+    StoriesListResponse:
+      type: object
+      properties:
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Story"
+        total_count:
+          type: integer
+          description: Total number of stories matching filters
+          example: 150
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        limit:
+          type: integer
+          description: Number of stories per page
+          example: 20
+        query_metadata:
+          type: object
+          properties:
+            language:
+              type: string
+              description: Language filter applied
+              example: en
+            genre:
+              type: string
+              description: Genre filter applied
+              example: Fantasy
+            search:
+              type: string
+              description: Search query applied
+              example: adventure
+          required:
+            - language
+      required:
+        - stories
+        - total_count
+        - page
+        - limit
+    UserProgress:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: User ID
+          example: user_123
+        story_id:
+          type: string
+          description: Story ID
+          example: story_abc123
+        language:
+          type: string
+          description: Language code
+          example: en
+        current_chapter:
+          type: integer
+          minimum: 1
+          description: Current chapter number
+          example: 3
+        current_chapter_progress:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Progress within current chapter (0.0-1.0)
+          example: 0.75
+        total_progress:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Total story progress (0.0-1.0)
+          example: 0.42
+        current_audio_position:
+          type: number
+          description: Current audio position in seconds
+          example: 1234.5
+        total_audio_position:
+          type: number
+          description: Total audio position in seconds
+          example: 5678.9
+        reading_mode:
+          type: string
+          enum:
+            - read
+            - listen
+            - mixed
+          description: Reading mode preference
+          example: listen
+        last_accessed_at:
+          type: string
+          description: Last access timestamp
+          example: 2025-09-16T12:00:00Z
+        started_at:
+          type: string
+          description: When user started reading/listening
+          example: 2025-09-15T08:00:00Z
+        completed_at:
+          type: string
+          nullable: true
+          description: When user completed the story (null if not completed)
+          example: null
+      required:
+        - user_id
+        - story_id
+        - language
+        - current_chapter
+        - current_chapter_progress
+        - total_progress
+        - current_audio_position
+        - total_audio_position
+        - reading_mode
+        - last_accessed_at
+        - started_at
+        - completed_at
+    UserProgressResponse:
+      type: object
+      properties:
+        progress:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserProgress"
+        total_count:
+          type: integer
+          description: Total number of progress records
+          example: 15
+      required:
+        - progress
+        - total_count
+    ProgressUpdateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        progress:
+          $ref: "#/components/schemas/UserProgress"
+      required:
+        - success
+        - progress
+    ProgressUpdateRequest:
+      type: object
+      properties:
+        language:
+          type: string
+          description: Language code
+          example: en
+        current_chapter:
+          type: integer
+          minimum: 1
+          description: Current chapter number
+          example: 3
+        current_chapter_progress:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Progress within current chapter (0.0-1.0)
+          example: 0.75
+        current_audio_position:
+          type: number
+          description: Current audio position in seconds
+          example: 1234.5
+        reading_mode:
+          type: string
+          enum:
+            - read
+            - listen
+            - mixed
+          description: Reading mode preference
+          example: listen
+        session_data:
+          type: object
+          properties:
+            platform:
+              type: string
+              enum:
+                - web
+                - mobile
+                - tablet
+              description: Platform type
+              example: mobile
+            device_info:
+              type: string
+              description: Device information
+              example: iPhone 12
+            session_duration:
+              type: number
+              description: Session duration in seconds
+              example: 3600
+          required:
+            - platform
+      required:
+        - language
+        - current_chapter
+        - current_chapter_progress
+        - reading_mode
+    Bookmark:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Bookmark ID
+          example: bookmark_123
+        user_id:
+          type: string
+          description: User ID
+          example: user_123
+        story_id:
+          type: string
+          description: Story ID
+          example: story_abc123
+        language:
+          type: string
+          description: Language code
+          example: en
+        chapter_number:
+          type: integer
+          description: Chapter number
+          example: 2
+        position_in_chapter:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Position within chapter (0.0-1.0)
+          example: 0.5
+        audio_position:
+          type: number
+          description: Audio position in seconds
+          example: 567.8
+        note:
+          type: string
+          description: User note/comment
+          example: Great character development here
+        created_at:
+          type: string
+          description: Creation timestamp
+          example: 2025-09-16T12:00:00Z
+      required:
+        - id
+        - user_id
+        - story_id
+        - language
+        - chapter_number
+        - position_in_chapter
+        - created_at
+    BookmarksResponse:
+      type: object
+      properties:
+        bookmarks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bookmark"
+        total_count:
+          type: integer
+          description: Total number of bookmarks
+          example: 25
+      required:
+        - bookmarks
+        - total_count
+    UserLibraryItem:
+      type: object
+      properties:
+        story_id:
+          type: string
+          description: Story ID
+          example: story_abc123
+        title:
+          type: string
+          description: Story title
+          example: The Adventure Begins
+        author:
+          type: string
+          description: Author name
+          example: Jane Doe
+        genre:
+          type: string
+          description: Story genre
+          example: Fantasy
+        cover_image_url:
+          type: string
+          format: uri
+          description: Cover image URL
+          example: https://example.com/cover.jpg
+        added_to_library_at:
+          type: string
+          description: When added to library
+          example: 2025-09-16T12:00:00Z
+        last_read_at:
+          type: string
+          description: Last read timestamp
+          example: 2025-09-16T12:00:00Z
+        total_progress:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Total reading progress (0.0-1.0)
+          example: 0.42
+        is_favorite:
+          type: boolean
+          description: Whether story is marked as favorite
+          example: true
+      required:
+        - story_id
+        - title
+        - author
+        - genre
+        - added_to_library_at
+        - total_progress
+        - is_favorite
+    UserLibraryResponse:
+      type: object
+      properties:
+        library:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserLibraryItem"
+        total_count:
+          type: integer
+          description: Total number of library items
+          example: 42
+      required:
+        - library
+        - total_count
+    StoryType:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - short_story
+            - mini_novel
+            - novel
+          description: Story type category
+          example: short_story
+        count:
+          type: integer
+          description: Number of stories in this category
+          example: 92
+        description:
+          type: string
+          description: Human-readable description of the story type
+          example: Quick reads with 1-8 chapters
+        chapterRange:
+          type: string
+          description: Chapter count range for this type
+          example: 1-8
+        apiEndpoint:
+          type: string
+          description: API endpoint to fetch stories of this type
+          example: /api/stories/by-type?type=short_story&language=en
+      required:
+        - type
+        - count
+        - description
+        - chapterRange
+        - apiEndpoint
+    StoryTypesResponse:
+      type: object
+      properties:
+        language:
+          type: string
+          description: Language code for the results
+          example: en
+        storyTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryType"
+        totalTypes:
+          type: integer
+          description: Total number of story types
+          example: 3
+        usage:
+          type: object
+          properties:
+            example:
+              type: string
+              description: Example API call
+              example: /api/stories/by-type?type=short_story&language=en
+            availableTypes:
+              type: array
+              items:
+                type: string
+              description: List of available story types
+              example: ["short_story", "mini_novel", "novel"]
+            parameters:
+              type: object
+              description: Available query parameters
+          required:
+            - example
+            - availableTypes
+            - parameters
+      required:
+        - language
+        - storyTypes
+        - totalTypes
+        - usage
+    StoryByTypeResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Requested story type
+          example: short_story
+        typeInfo:
+          type: object
+          properties:
+            description:
+              type: string
+              description: Description of the story type
+              example: Quick reads with 1-8 chapters
+            chapterRange:
+              type: string
+              description: Chapter count range
+              example: 1-8
+            criteria:
+              type: string
+              description: Selection criteria
+              example: Stories with 1 to 8 chapters
+          required:
+            - description
+            - chapterRange
+            - criteria
+        language:
+          type: string
+          description: Language code
+          example: en
+        stories:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/Story"
+              - type: object
+                properties:
+                  storyType:
+                    type: string
+                    description: Story type category
+                    example: short_story
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+            limit:
+              type: integer
+              description: Number of stories per page
+              example: 20
+            total:
+              type: integer
+              description: Total number of stories in this category
+              example: 92
+            hasMore:
+              type: boolean
+              description: Whether there are more pages
+              example: true
+            hasPrev:
+              type: boolean
+              description: Whether there are previous pages
+              example: false
+            nextPage:
+              type: integer
+              nullable: true
+              description: Next page number (null if none)
+              example: 2
+            prevPage:
+              type: integer
+              nullable: true
+              description: Previous page number (null if none)
+              example: null
+          required:
+            - page
+            - limit
+            - total
+            - hasMore
+            - hasPrev
+        meta:
+          type: object
+          properties:
+            totalStories:
+              type: integer
+              description: Number of stories in current response
+              example: 5
+            averageChapters:
+              type: number
+              description: Average chapter count for returned stories
+              example: 7.0
+            storiesWithAudio:
+              type: integer
+              description: Number of stories with audio in current response
+              example: 0
+          required:
+            - totalStories
+            - averageChapters
+            - storiesWithAudio
+      required:
+        - type
+        - typeInfo
+        - language
+        - stories
+        - pagination
+        - meta
+  parameters: {}
 security:
   - bearerAuth: []
-
+tags:
+  - name: Stories
+    description: Stories related operations
+  - name: User
+    description: User related operations
+  - name: Search
+    description: Search related operations
+  - name: Content
+    description: Content related operations
+  - name: Audio
+    description: Audio related operations
 paths:
-  # Story Discovery & Browse
+  /api/health:
+    get:
+      tags:
+        - System
+      summary: Health check endpoint
+      description: Returns the current health status of the API
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
   /api/stories:
     get:
       tags:
-        - Story Discovery
-      summary: Browse and search stories
-      description: |
-        **Individual Story Architecture v4.0 - Enhanced Language Support**
-
-        Browse stories with native language display and advanced filtering:
-        - `?language=es` - Show Spanish stories with Spanish titles
-        - `?languages=es,fr` - Stories available in BOTH Spanish AND French
-        - `?audio_language=es` - Stories with Spanish audio
-        - `?quality_min=80` - High-quality translations only (deprecated - all stories are now high quality)
-
-        **Key Features:**
-        - Native language titles (Spanish users see Spanish titles)
-        - Translation quality scores and statistics
-        - Featured story curation with cover images
-        - Advanced sorting (newest, popular, top-rated)
-        - Pagination with mobile-optimized limits
-
-        **Performance Optimizations (September 2025):**
-        - ⚡ **Under 1 second response time** (86% faster than v3.0)
-        - 📱 **Minimal data transfer** - Only essential fields for list view
-        - 🔍 **Smart pagination** - Uses `hasMore` instead of expensive count queries
-        - 🚀 **Database indexes** - Optimized for common filter patterns
-        
-      operationId: browseStories
+        - Stories
+      summary: List stories
+      description: Get a paginated list of stories with optional filtering
       parameters:
-        - name: language
-          in: query
-          description: Filter stories by language (shows native titles)
-          schema:
+        - schema:
             type: string
-            pattern: '^[a-z]{2}$'
-            example: "es"
-        - name: languages
-          in: query  
-          description: Filter stories available in ALL specified languages (comma-separated)
-          schema:
+          required: false
+          name: search
+          in: query
+        - schema:
             type: string
-            pattern: '^[a-z]{2}(,[a-z]{2})*$'
-            example: "es,fr,de"
-        - name: audio_language
+          required: false
+          name: q
           in: query
-          description: Filter stories with audio in specific language
-          schema:
+        - schema:
             type: string
-            pattern: '^[a-z]{2}$'
-            example: "es"
-        - name: quality_min
+            example: en
+          required: false
+          name: language
           in: query
-          description: Minimum translation quality score (deprecated in v4.0 - all stories are high quality)
-          schema:
-            type: integer
-            minimum: 0
-            maximum: 100
-            example: 80
-        - name: search
-          in: query
-          description: Search query for titles, authors, descriptions
-          schema:
+        - schema:
             type: string
-            example: "sabores futuro"
-        - name: genre
+          required: false
+          name: languages
           in: query
-          description: Filter by genre (use genre ID from /genres endpoint)
-          schema:
+        - schema:
             type: string
-            enum: 
-              - "fantasy"
-              - "adventure"
-              - "mystery"
-              - "sci-fi"
-              - "romance"
-              - "thriller"
-              - "horror"
-              - "historical"
-              - "comedy"
-              - "drama"
-              - "action"
-              - "children"
-            example: "fantasy"
-        - name: author
+            example: en
+          required: false
+          name: audio_language
           in: query
-          description: Filter by author
-          schema:
+        - schema:
             type: string
-            example: "AI Story Weaver"
-        - name: tags
+          required: false
+          name: genre
           in: query
-          description: Filter by tags (comma-separated)
-          schema:
+        - schema:
             type: string
-            example: "sci-fi,culinary"
-        - name: featured
+          required: false
+          name: author
           in: query
-          description: Show only featured stories
-          schema:
-            type: boolean
-            example: true
-        - name: sort
-          in: query
-          description: Sort order
-          schema:
+        - schema:
             type: string
-            enum: [newest, popular, top_rated, featured]
-            default: newest
-        - name: duration
+            example: published
+          required: false
+          name: status
           in: query
-          description: Filter by reading time
-          schema:
+        - schema:
             type: string
-            enum: [short, medium, long]
-        - name: page
+          required: false
+          name: tags
           in: query
-          description: Page number (1-based)
-          schema:
+        - schema:
+            type: string
+          required: false
+          name: featured
+          in: query
+        - schema:
+            type: string
+            example: newest
+          required: false
+          name: sort
+          in: query
+        - schema:
             type: integer
             minimum: 1
             default: 1
-        - name: limit
+          required: false
+          name: page
           in: query
-          description: Items per page
-          schema:
+        - schema:
             type: integer
             minimum: 1
             maximum: 50
             default: 20
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: duration
+          in: query
       responses:
-        '200':
-          description: Stories retrieved successfully
+        "200":
+          description: List of stories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoriesListResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/genres:
+    get:
+      tags:
+        - Stories
+      summary: List story genres
+      description: Get list of available story genres with counts
+      responses:
+        "200":
+          description: List of genres
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/tags:
+    get:
+      tags:
+        - Stories
+      summary: List story tags
+      description: Get all unique tags from published stories
+      responses:
+        "200":
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/authors:
+    get:
+      tags:
+        - Stories
+      summary: List story authors
+      description: Get all unique authors from published stories
+      responses:
+        "200":
+          description: List of authors
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/languages:
+    get:
+      tags:
+        - Stories
+      summary: List story languages
+      description: Get list of available story languages with counts
+      responses:
+        "200":
+          description: List of languages
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/by-type:
+    get:
+      tags:
+        - Stories
+      summary: Get stories by type
+      description: |
+        Get stories categorized by type based on chapter count.
+
+        **Story Type Categories:**
+        - **short_story**: 1-8 chapters (Quick reads)
+        - **mini_novel**: 9-20 chapters (Medium-length stories)
+        - **novel**: 21+ chapters (Full-length novels)
+
+        **Usage:**
+        - Without `type` parameter: Returns all story types with counts
+        - With `type` parameter: Returns paginated stories of that type
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - short_story
+              - mini_novel
+              - novel
+            description: Story type to filter by (optional)
+            example: short_story
+          required: false
+          name: type
+          in: query
+        - schema:
+            type: string
+            description: Language code (defaults to 'en')
+            example: en
+          required: false
+          name: language
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            default: 1
+            description: Page number
+            example: 1
+          required: false
+          name: page
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+            description: Stories per page
+            example: 20
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Story types overview or specific type results
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/StoryTypesResponse"
+                  - $ref: "#/components/schemas/StoryByTypeResponse"
+                examples:
+                  story_types_overview:
+                    summary: Story types overview (no type parameter)
+                    value:
+                      language: "en"
+                      storyTypes:
+                        - type: "short_story"
+                          count: 92
+                          description: "Quick reads with 1-8 chapters"
+                          chapterRange: "1-8"
+                          apiEndpoint: "/api/stories/by-type?type=short_story&language=en"
+                        - type: "mini_novel"
+                          count: 8
+                          description: "Medium-length stories with 9-20 chapters"
+                          chapterRange: "9-20"
+                          apiEndpoint: "/api/stories/by-type?type=mini_novel&language=en"
+                        - type: "novel"
+                          count: 2
+                          description: "Full-length novels with 21+ chapters"
+                          chapterRange: "21-100"
+                          apiEndpoint: "/api/stories/by-type?type=novel&language=en"
+                      totalTypes: 3
+                      usage:
+                        example: "/api/stories/by-type?type=short_story&language=en"
+                        availableTypes: ["short_story", "mini_novel", "novel"]
+                        parameters:
+                          type: "Required: short_story, mini_novel, or novel"
+                          language: "Optional: language code (default: en)"
+                          page: "Optional: page number (default: 1)"
+                          limit: "Optional: results per page (default: 20, max: 50)"
+                  specific_type_stories:
+                    summary: Specific story type results (with type parameter)
+                    value:
+                      type: "short_story"
+                      typeInfo:
+                        description: "Quick reads with 1-8 chapters"
+                        chapterRange: "1-8"
+                        criteria: "Stories with 1 to 8 chapters"
+                      language: "en"
+                      stories:
+                        - id: "trust-no-memory"
+                          title: "Trust No Memory"
+                          author: "AI Story Generator"
+                          genre: "Sci-Fi"
+                          language: "en"
+                          totalChapters: 8
+                          readingTime: 40
+                          thumbnailUrl: "/api/content/trust-no-memory/image/en/thumbnail.jpg"
+                          hasAudio: false
+                          audioChaptersCount: 0
+                          totalAudioDuration: 0
+                          storyType: "short_story"
+                      pagination:
+                        page: 1
+                        limit: 20
+                        total: 92
+                        hasMore: true
+                        hasPrev: false
+                        nextPage: 2
+                        prevPage: null
+                      meta:
+                        totalStories: 1
+                        averageChapters: 8.0
+                        storiesWithAudio: 0
+        "500":
+          description: Server error
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  stories:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Story'
-                  count:
-                    type: integer
-                    description: Number of stories returned in this response
-                    example: 20
-                  page:
-                    type: integer
-                    example: 1
-                  limit:
-                    type: integer
-                    example: 20
-                  hasMore:
-                    type: boolean
-                    description: Whether more stories are available on next page
-                    example: true
-                  hasPrev:
-                    type: boolean
-                    example: false
-                  meta:
-                    type: object
-                    nullable: true
-                    description: Query metadata for debugging and client information
-                    properties:
-                      searchQuery:
-                        type: string
-                        nullable: true
-                      sortBy:
-                        type: string
-                      appliedFilters:
-                        type: object
-                        properties:
-                          language:
-                            type: string
-                            nullable: true
-                          genre:
-                            type: string
-                            nullable: true
-                            enum: 
-                              - "fantasy"
-                              - "adventure"
-                              - "mystery"
-                              - "sci-fi"
-                              - "romance"
-                              - "thriller"
-                              - "horror"
-                              - "historical"
-                              - "comedy"
-                              - "drama"
-                              - "action"
-                              - "children"
-                          featured:
-                            type: boolean
-                            nullable: true
-                      languageFiltering:
-                        type: object
-                        properties:
-                          singleLanguage:
-                            type: string
-                            nullable: true
-                          audioLanguage:
-                            type: string
-                            nullable: true
-                          qualityThreshold:
-                            type: integer
-                            nullable: true
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/stories/{storyId}:
+                  error:
+                    type: string
+                    example: "Failed to fetch stories by type"
+  /api/stories/group/{languageGroupId}:
     get:
       tags:
-        - Story Discovery
-      summary: Get individual story details
-      description: |
-        Retrieve complete story information including chapters manifest.
-        
-        **Individual Story Architecture v4.0:**
-        - Supports language-specific story IDs (`story-es`, `story-fr`)
-        - Returns native language metadata
-        - Includes chapters manifest for audio/text streaming
-        - Lightweight response optimized for mobile
-        
-      operationId: getStory
+        - Stories
+      summary: Get translation group
+      description: Get master and translations for a language group
       parameters:
-        - name: storyId
-          in: path
+        - schema:
+            type: string
           required: true
-          description: Story ID (language-specific for v4.0)
-          schema:
-            type: string
-            example: "future-flavors-unveiled-es"
-        - name: language
-          in: query
-          description: Preferred language for fallback content
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-            default: "en"
+          name: languageGroupId
+          in: path
       responses:
-        '200':
-          description: Story retrieved successfully
+        "200":
+          description: Group details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StoryDetailed'
-        '404':
+                nullable: true
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/{storyId}:
+    get:
+      tags:
+        - Stories
+      summary: Get story details
+      description: Get detailed information about a specific story
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: storyId
+          in: path
+      responses:
+        "200":
+          description: Story details
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "404":
           description: Story not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/stories/group/{languageGroupId}:
+                nullable: true
+  /api/stories/suggestions:
     get:
       tags:
-        - Story Discovery
-      summary: Get all translations of a story
-      description: |
-        **NEW in Individual Story Architecture v4.0**
-        
-        Discover all language versions of a story for language switching.
-        
-        **Features:**
-        - Master story identification
-        - Translation quality scores
-        - UI-ready language switcher data
-        - Complete API endpoints for each translation
-        
-      operationId: getStoryTranslations
+        - Stories
+      summary: Search suggestions
+      description: Return suggestions for stories, authors, and genres
       parameters:
-        - name: languageGroupId
-          in: path
-          required: true
-          description: Language group ID linking all translations
-          schema:
+        - schema:
             type: string
-            example: "future-flavors-unveiled"
-      responses:
-        '200':
-          description: Translation group retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  languageGroupId:
-                    type: string
-                    example: "future-flavors-unveiled"
-                  master:
-                    type: string
-                    description: Master story ID
-                    example: "future-flavors-unveiled"
-                  masterStory:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      title:
-                        type: string
-                      language:
-                        type: string
-                      author:
-                        type: string
-                  translations:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          example: "future-flavors-unveiled-es"
-                        language:
-                          type: string
-                          example: "es"
-                        title:
-                          type: string
-                          example: "Sabores del Futuro Revelados"
-                        description:
-                          type: string
-                        author:
-                          type: string
-                        isMaster:
-                          type: boolean
-                        translationQuality:
-                          type: integer
-                        coverImageUrl:
-                          type: string
-                        thumbnailUrl:
-                          type: string
-                        totalChapters:
-                          type: integer
-                        readingTime:
-                          type: integer
-                        status:
-                          type: string
-                        createdAt:
-                          type: string
-                        apiEndpoints:
-                          type: object
-                          properties:
-                            story:
-                              type: string
-                            metadata:
-                              type: string
-                            content:
-                              type: string
-                  stats:
-                    type: object
-                    properties:
-                      totalTranslations:
-                        type: integer
-                      averageQuality:
-                        type: integer
-                      availableLanguages:
-                        type: array
-                        items:
-                          type: string
-                      hasAudio:
-                        type: boolean
-                      masterLanguage:
-                        type: string
-                      totalChapters:
-                        type: integer
-                  ui:
-                    type: object
-                    description: UI helper data
-                    properties:
-                      defaultTranslation:
-                        type: string
-                      languageSwitcher:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            code:
-                              type: string
-                            name:
-                              type: string
-                            storyId:
-                              type: string
-                            title:
-                              type: string
-                            quality:
-                              type: integer
-        '404':
-          description: Language group not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  # Content Delivery
-  /api/content/{storyId}/{language}/metadata:
-    get:
-      tags:
-        - Content Delivery
-      summary: Get language-specific story metadata
-      description: |
-        **Individual Story Architecture v4.0 - Enhanced Metadata**
-        
-        Retrieve complete story metadata for specific language version.
-        
-        **Features:**
-        - Language-specific story ID support
-        - Multi-fallback strategy (language → global → legacy)
-        - Native language content and titles
-        - Chapters manifest for structured content
-        
-      operationId: getStoryMetadata
-      parameters:
-        - name: storyId
-          in: path
-          required: true
-          description: Story ID (supports both base ID and language-specific ID)
-          schema:
-            type: string
-            example: "future-flavors-unveiled-es"
-        - name: language
-          in: path
-          required: true
-          description: Target language
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-            example: "es"
-      responses:
-        '200':
-          description: Metadata retrieved successfully
-          headers:
-            Content-Language:
-              description: Language of returned content
-              schema:
-                type: string
-            X-Metadata-Source:
-              description: Source of metadata (language-specific, global-fallback, etc.)
-              schema:
-                type: string
-            X-Story-Architecture:
-              description: Story architecture version
-              schema:
-                type: string
-                example: "individual-v4.0"
-            Cache-Control:
-              description: Caching instructions
-              schema:
-                type: string
-                example: "public, max-age=300"
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StoryMetadata'
-        '404':
-          description: Metadata not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/chapters/{storyId}/{chapterId}/content:
-    get:
-      tags:
-        - Content Delivery
-      summary: Get chapter text content
-      description: |
-        Retrieve structured text content for a specific chapter.
-        
-        **Content Blocks Architecture:**
-        - Mixed content types (text, images, audio, quotes)
-        - Mobile-optimized rendering
-        - Asset URL resolution
-        
-      operationId: getChapterContent
-      parameters:
-        - name: storyId
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "future-flavors-unveiled-es"
-        - name: chapterId
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "chapter_01"
-        - name: language
-          in: query
-          description: Content language preference
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-            default: "en"
-      responses:
-        '200':
-          description: Chapter content retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    example: "chapter_01"
-                  title:
-                    type: string
-                    example: "El Despertar Culinario"
-                  chapterNumber:
-                    type: integer
-                    example: 1
-                  language:
-                    type: string
-                    example: "es"
-                  content:
-                    type: array
-                    description: Content blocks array
-                    items:
-                      $ref: '#/components/schemas/ContentBlock'
-                  metadata:
-                    type: object
-                    properties:
-                      wordCount:
-                        type: integer
-                      readingTime:
-                        type: integer
-                      audioAvailable:
-                        type: boolean
-                      audioUrl:
-                        type: string
-                        nullable: true
-        '404':
-          description: Chapter not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/content/{storyId}/audio/{language}/{filename}:
-    get:
-      tags:
-        - Content Delivery
-      summary: Stream audio content
-      description: |
-        Stream audio files with mobile optimization.
-        
-        **Mobile Audio Streaming:**
-        - Byte-range request support for progressive loading
-        - Multiple audio formats (MP3, M4A, OGG)
-        - Aggressive caching for offline playback
-        - Language-specific audio with shared asset fallback
-        
-      operationId: streamAudio
-      parameters:
-        - name: storyId
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "future-flavors-unveiled-es"
-        - name: language
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-            example: "es"
-        - name: filename
-          in: path
-          required: true
-          schema:
-            type: string
-            example: "chapter_01.mp3"
-        - name: Range
-          in: header
           required: false
-          description: Byte range for progressive streaming
-          schema:
-            type: string
-            example: "bytes=0-1023"
+          name: q
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 5
+          required: false
+          name: limit
+          in: query
       responses:
-        '200':
-          description: Full audio file
-          headers:
-            Content-Type:
-              schema:
-                type: string
-                example: "audio/mpeg"
-            Content-Length:
-              schema:
-                type: integer
-            Accept-Ranges:
-              schema:
-                type: string
-                example: "bytes"
-            Cache-Control:
-              schema:
-                type: string
-            X-Asset-Source:
-              schema:
-                type: string
-                example: "language-specific"
-            X-Fallback-Used:
-              schema:
-                type: string
-                example: "false"
-          content:
-            audio/mpeg:
-              schema:
-                type: string
-                format: binary
-        '206':
-          description: Partial audio content (byte range)
-          headers:
-            Content-Range:
-              schema:
-                type: string
-                example: "bytes 0-1023/245760"
-            Accept-Ranges:
-              schema:
-                type: string
-                example: "bytes"
-            Content-Length:
-              schema:
-                type: integer
-            Content-Type:
-              schema:
-                type: string
-                example: "audio/mpeg"
-          content:
-            audio/mpeg:
-              schema:
-                type: string
-                format: binary
-        '404':
-          description: Audio file not found
+        "200":
+          description: Suggestions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '416':
-          description: Range not satisfiable
-          headers:
-            Content-Range:
+                nullable: true
+  /api/stories/{id}/audio:
+    get:
+      tags:
+        - Stories
+      summary: Get story audio (by chapter)
+      description: Serve audio for a given story/chapter with range requests support
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+          required: false
+          name: language
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: chapter
+          in: query
+      responses:
+        "200":
+          description: Audio stream
+          content:
+            audio/mpeg:
               schema:
-                type: string
-                example: "bytes */245760"
+                nullable: true
+        "404":
+          description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
-  # User Management
+                nullable: true
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/{storyId}/chapters/{chapterNumber}/audio:
+    get:
+      tags:
+        - Stories
+      summary: Get chapter audio
+      description: Serve chapter audio with range requests support
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: storyId
+          in: path
+        - schema:
+            type: string
+          required: true
+          name: chapterNumber
+          in: path
+        - schema:
+            type: string
+          required: false
+          name: language
+          in: query
+      responses:
+        "200":
+          description: Audio stream
+          content:
+            audio/mpeg:
+              schema:
+                nullable: true
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/{storyId}/chapters/audio/manifest:
+    get:
+      tags:
+        - Stories
+      summary: Get chapter audio manifest
+      description: Return audio manifest for all chapters in a story
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: storyId
+          in: path
+        - schema:
+            type: string
+          required: false
+          name: language
+          in: query
+      responses:
+        "200":
+          description: Audio manifest
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/{storyId}/chapters/metadata:
+    post:
+      tags:
+        - Stories
+      summary: Create or update chapter metadata
+      description: Create/update chapter metadata used for streaming
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: storyId
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              nullable: true
+      responses:
+        "200":
+          description: Metadata saved
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                nullable: true
+  /api/stories/{id}/content:
+    post:
+      tags:
+        - Stories
+      summary: Upload story content
+      description: Upload text/audio content to R2 and store reference
+      parameters:
+        - schema:
+            type: string
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+          required: false
+          name: type
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: language
+          in: query
+      responses:
+        "200":
+          description: Upload result
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                nullable: true
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                nullable: true
   /api/user/progress:
     get:
       tags:
-        - User Tracking
-      summary: Get user reading progress
-      description: |
-        Retrieve user's reading progress across all stories.
-        
-        **Individual Story Architecture v4.0:**
-        - Tracks progress per language-specific story ID
-        - Cross-device synchronization support
-        - Reading streaks and achievements
-        
-      operationId: getUserProgress
+        - User
+      summary: Get user progress
+      description: Get reading/listening progress for all stories
       security:
         - bearerAuth: []
       parameters:
-        - name: story_id
-          in: query
-          description: Filter by specific story
-          schema:
+        - schema:
             type: string
-            example: "future-flavors-unveiled-es"
-        - name: limit
+            description: Filter by language code
+            example: en
+          required: false
+          name: language
           in: query
-          description: Number of items to return
-          schema:
+        - schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 20
+            description: Number of progress records per page
+            example: 20
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: integer
+            nullable: true
+            minimum: 0
+            default: 0
+            description: Number of records to skip
+            example: 0
+          required: false
+          name: offset
+          in: query
       responses:
-        '200':
-          description: Progress data retrieved successfully
+        "200":
+          description: User progress records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProgressResponse"
+        "401":
+          description: Unauthorized - authentication required
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  progress:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserProgress'
-                  stats:
-                    type: object
-                    properties:
-                      totalStoriesStarted:
-                        type: integer
-                      totalStoriesCompleted:
-                        type: integer
-                      totalReadingTime:
-                        type: integer
-                        description: Total minutes read
-                      currentStreak:
-                        type: integer
-                        description: Days of consecutive reading
-                      longestStreak:
-                        type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
+                  error:
+                    type: string
+                    example: Authentication required
+                required:
+                  - error
+  /api/user/progress/{storyId}:
     post:
       tags:
-        - User Tracking
-      summary: Update reading progress
-      description: |
-        Update user's current reading position.
-        
-        **Mobile Integration:**
-        - Automatic progress sync across devices
-        - Chapter-level and sentence-level tracking
-        - Offline progress queuing
-        
-      operationId: updateUserProgress
+        - User
+      summary: Update story progress
+      description: Update reading/listening progress for a specific story
       security:
         - bearerAuth: []
+      parameters:
+        - schema:
+            type: string
+            description: Story ID
+            example: story_abc123
+          required: true
+          name: storyId
+          in: path
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - story_id
-                - chapter_id
-                - progress_percentage
-              properties:
-                story_id:
-                  type: string
-                  example: "future-flavors-unveiled-es"
-                chapter_id:
-                  type: string
-                  example: "chapter_01"
-                progress_percentage:
-                  type: number
-                  minimum: 0
-                  maximum: 100
-                  example: 75.5
-                reading_time_seconds:
-                  type: integer
-                  description: Time spent reading this session
-                  example: 180
-                last_position:
-                  type: object
-                  description: Detailed position information
-                  properties:
-                    paragraph_index:
-                      type: integer
-                    sentence_index:
-                      type: integer
-                    word_index:
-                      type: integer
-                device_info:
-                  type: object
-                  description: Device information for sync
-                  properties:
-                    device_id:
-                      type: string
-                    platform:
-                      type: string
-                      enum: [ios, android, web]
-                    app_version:
-                      type: string
+              $ref: "#/components/schemas/ProgressUpdateRequest"
       responses:
-        '200':
+        "200":
           description: Progress updated successfully
           content:
             application/json:
               schema:
+                $ref: "#/components/schemas/ProgressUpdateResponse"
+        "400":
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                    example: true
-                  updated_progress:
-                    $ref: '#/components/schemas/UserProgress'
-                  achievements:
-                    type: array
-                    description: Any newly unlocked achievements
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        title:
-                          type: string
-                        description:
-                          type: string
-                        icon:
-                          type: string
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
+                  error:
+                    type: string
+                    example: Invalid progress data
+                required:
+                  - error
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Authentication required
+                required:
+                  - error
   /api/user/bookmarks:
     get:
       tags:
-        - User Tracking
+        - User
       summary: Get user bookmarks
-      description: Get user's saved bookmarks and favorites
-      operationId: getUserBookmarks
+      description: Get all bookmarks for the authenticated user
       security:
         - bearerAuth: []
       parameters:
-        - name: type
-          in: query
-          description: Bookmark type filter
-          schema:
+        - schema:
             type: string
-            enum: [story, chapter, quote]
-        - name: limit
+            description: Filter by story ID
+            example: story_abc123
+          required: false
+          name: story_id
           in: query
-          schema:
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+            description: Number of bookmarks per page
+            example: 50
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: integer
+            nullable: true
+            minimum: 0
+            default: 0
+            description: Number of bookmarks to skip
+            example: 0
+          required: false
+          name: offset
+          in: query
+      responses:
+        "200":
+          description: User bookmarks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookmarksResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Authentication required
+                required:
+                  - error
+  /api/user/library:
+    get:
+      tags:
+        - User
+      summary: Get user library
+      description: Get all stories in user's personal library
+      security:
+        - bearerAuth: []
+      parameters:
+        - schema:
+            type: boolean
+            nullable: true
+            default: false
+            description: Show only favorite stories
+            example: false
+          required: false
+          name: favorites_only
+          in: query
+        - schema:
+            type: string
+            enum:
+              - recent
+              - title
+              - author
+              - progress
+            default: recent
+            description: Sort order
+            example: recent
+          required: false
+          name: sort
+          in: query
+        - schema:
             type: integer
             minimum: 1
             maximum: 100
             default: 20
-      responses:
-        '200':
-          description: Bookmarks retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  bookmarks:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserBookmark'
-                  total:
-                    type: integer
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-    post:
-      tags:
-        - User Tracking
-      summary: Add bookmark
-      description: Add a new bookmark or favorite
-      operationId: addBookmark
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - story_id
-                - type
-              properties:
-                story_id:
-                  type: string
-                  example: "future-flavors-unveiled-es"
-                chapter_id:
-                  type: string
-                  nullable: true
-                type:
-                  type: string
-                  enum: [story, chapter, quote]
-                title:
-                  type: string
-                  description: Custom bookmark title
-                note:
-                  type: string
-                  description: User note
-                position:
-                  type: object
-                  description: Position within content
-                  properties:
-                    paragraph_index:
-                      type: integer
-                    sentence_index:
-                      type: integer
-                quote_text:
-                  type: string
-                  description: Selected text for quote bookmarks
-      responses:
-        '201':
-          description: Bookmark created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  bookmark:
-                    $ref: '#/components/schemas/UserBookmark'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  # Recommendation & Discovery
-  /api/surprise-me:
-    get:
-      tags:
-        - Story Discovery
-      summary: Get random story recommendations
-      description: |
-        Get personalized story suggestions based on user preferences and reading history.
-
-        **Individual Story Architecture v4.1:**
-        - Smart recommendations based on reading patterns
-        - Excludes already read stories when possible
-        - Fallback to random suggestions if no unread stories
-        - Audio metadata included for UI indicators
-
-      operationId: getSurpriseRecommendation
-      parameters:
-        - name: userId
+            description: Number of stories per page
+            example: 20
+          required: false
+          name: limit
           in: query
-          required: true
-          description: User ID for personalized recommendations
-          schema:
-            type: string
-            example: "user123"
-        - name: language
-          in: query
-          description: Preferred language for recommendations
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-            default: "en"
-            example: "es"
-        - name: genre
-          in: query
-          description: Optional genre filter
-          schema:
-            type: string
-            enum:
-              - "fantasy"
-              - "adventure"
-              - "mystery"
-              - "sci-fi"
-              - "romance"
-              - "thriller"
-              - "horror"
-              - "historical"
-              - "comedy"
-              - "drama"
-              - "action"
-              - "children"
-      responses:
-        '200':
-          description: Story recommendation retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Here's a story you haven't read yet!"
-                  suggestion:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        example: "future-flavors-unveiled-es"
-                      title:
-                        type: string
-                        example: "Sabores del Futuro Revelados"
-                      author:
-                        type: string
-                        example: "AI Story Weaver"
-                      genre:
-                        type: string
-                        example: "sci-fi"
-                      language:
-                        type: string
-                        example: "es"
-                      thumbnailUrl:
-                        type: string
-                        nullable: true
-                        example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
-                      hasAudio:
-                        type: boolean
-                        example: false
-                      audioChaptersCount:
-                        type: integer
-                        example: 0
-                      totalAudioDuration:
-                        type: integer
-                        example: 0
-                      readingTime:
-                        type: integer
-                        example: 25
-                      created_at:
-                        type: string
-                        format: date-time
-                      isReread:
-                        type: boolean
-                        description: Whether this is a re-read suggestion
-                        example: false
-                      reason:
-                        type: string
-                        enum: [unread_match, fallback_random]
-                        description: Reason for this recommendation
-                        example: "unread_match"
-        '400':
-          description: Missing required userId parameter
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  error:
-                    type: string
-                    example: "userId parameter is required"
-        '404':
-          description: No stories found matching criteria
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  error:
-                    type: string
-                    example: "No stories found matching your criteria"
-                  suggestion:
-                    type: "null"
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/surprise-me/preferences:
-    get:
-      tags:
-        - Story Discovery
-      summary: Get personalized story recommendations
-      description: |
-        Get story recommendations based on user's reading preferences and history.
-        Analyzes reading patterns to suggest stories in preferred genres.
-
-      operationId: getPersonalizedRecommendation
-      parameters:
-        - name: userId
-          in: query
-          required: true
-          description: User ID for personalized analysis
-          schema:
-            type: string
-            example: "user123"
-        - name: language
-          in: query
-          description: Preferred language for recommendations
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-            default: "en"
-            example: "es"
-      responses:
-        '200':
-          description: Personalized recommendation retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Here's a story based on your reading preferences!"
-                  suggestion:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      title:
-                        type: string
-                      author:
-                        type: string
-                      genre:
-                        type: string
-                      language:
-                        type: string
-                      thumbnailUrl:
-                        type: string
-                        nullable: true
-                      hasAudio:
-                        type: boolean
-                      audioChaptersCount:
-                        type: integer
-                      totalAudioDuration:
-                        type: integer
-                      readingTime:
-                        type: integer
-                      created_at:
-                        type: string
-                        format: date-time
-                      isReread:
-                        type: boolean
-                      reason:
-                        type: string
-                        enum: [preference_match, unread_fallback]
-                      matchedPreferences:
-                        type: array
-                        items:
-                          type: string
-                        description: User's preferred genres that match this story
-                  userPreferences:
-                    type: object
-                    properties:
-                      preferredGenres:
-                        type: array
-                        items:
-                          type: string
-                        description: Genres user reads most frequently
-                        example: ["sci-fi", "adventure"]
-                      language:
-                        type: string
-                        example: "es"
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          description: No unread stories found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  error:
-                    type: string
-                    example: "No unread stories found"
-                  suggestion:
-                    type: "null"
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  # Search & Discovery
-  /api/search:
-    get:
-      tags:
-        - Search
-      summary: Search stories and content
-      description: |
-        Full-text search across stories, authors, and content.
-
-        **Individual Story Architecture v4.0:**
-        - Language-aware search results
-        - Native language title display
-        - Translation quality in results
-
-        **Performance Optimized (September 2025):**
-        - ⚡ **Under 1 second response** (62% faster)
-        - 🎯 **Minimal response** - Only essential fields for search selection
-        - 🔍 **Database indexes** - Fast LIKE queries on title, author, genre
-        
-      operationId: searchStories
-      parameters:
-        - name: q
-          in: query
-          required: true
-          description: Search query
-          schema:
-            type: string
-            example: "sabores futuro"
-        - name: language
-          in: query
-          description: Search within specific language
-          schema:
-            type: string
-            pattern: '^[a-z]{2}$'
-        - name: type
-          in: query
-          description: Search type
-          schema:
-            type: string
-            enum: [all, stories, authors, content]
-            default: all
-        - name: limit
-          in: query
-          schema:
+        - schema:
             type: integer
-            minimum: 1
-            maximum: 50
-            default: 10
-      responses:
-        '200':
-          description: Search results
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  stories:
-                    type: array
-                    items:
-                      type: object
-                      description: Minimal search result for performance
-                      properties:
-                        id:
-                          type: string
-                          example: "future-flavors-unveiled-es"
-                        title:
-                          type: string
-                          example: "Sabores del Futuro Revelados"
-                        author:
-                          type: string
-                          example: "AI Story Weaver"
-                        genre:
-                          type: string
-                          example: "sci-fi"
-                        language:
-                          type: string
-                          example: "es"
-                        thumbnailUrl:
-                          type: string
-                          nullable: true
-                          example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
-                        hasAudio:
-                          type: boolean
-                          example: false
-                        audioChaptersCount:
-                          type: integer
-                          example: 0
-                        totalAudioDuration:
-                          type: integer
-                          example: 0
-                  total:
-                    type: integer
-                  query:
-                    type: string
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/stories/suggestions:
-    get:
-      tags:
-        - Search
-      summary: Get search suggestions
-      description: Autocomplete suggestions for search queries
-      operationId: getSearchSuggestions
-      parameters:
-        - name: q
+            nullable: true
+            minimum: 0
+            default: 0
+            description: Number of stories to skip
+            example: 0
+          required: false
+          name: offset
           in: query
-          required: true
-          description: Partial search query
-          schema:
-            type: string
-            minLength: 2
-            example: "sab"
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 10
-            default: 5
       responses:
-        '200':
-          description: Search suggestions
+        "200":
+          description: User library
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserLibraryResponse"
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success:
-                    type: boolean
-                  suggestions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        text:
-                          type: string
-                        type:
-                          type: string
-                          enum: [story, author, genre]
-                        id:
-                          type: string
-                          nullable: true
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  # Billing & Subscription
-  /api/billing/plans:
-    get:
-      tags:
-        - Billing
-      summary: Get subscription plans
-      description: Retrieve available subscription plans
-      operationId: getSubscriptionPlans
-      responses:
-        '200':
-          description: Subscription plans
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  plans:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/SubscriptionPlan'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/billing/checkout-link:
-    post:
-      tags:
-        - Billing
-      summary: Create checkout session
-      description: Create a checkout session for subscription purchase
-      operationId: createCheckoutSession
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - plan_id
-              properties:
-                plan_id:
-                  type: string
-                  example: "plan_monthly_premium"
-                success_url:
-                  type: string
-                  format: uri
-                  example: "https://app.neutale.com/subscription/success"
-                cancel_url:
-                  type: string
-                  format: uri
-                  example: "https://app.neutale.com/subscription/cancel"
-      responses:
-        '200':
-          description: Checkout session created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  checkout_url:
+                  error:
                     type: string
-                    format: uri
-                  session_id:
-                    type: string
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  # Metadata Endpoints
-  /api/stories/genres:
-    get:
-      tags:
-        - Metadata
-      summary: Get available genres
-      description: |
-        Get comprehensive list of all supported story genres with metadata.
-        Returns centralized genre definitions with UI hints, descriptions, and audience targeting.
-      operationId: getGenres
-      responses:
-        '200':
-          description: Genres list with metadata
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  genres:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          description: Unique genre identifier
-                          example: "fantasy"
-                        name:
-                          type: string
-                          description: Display name for UI
-                          example: "Fantasy"
-                        description:
-                          type: string
-                          description: Brief description for UI tooltips
-                          example: "Stories with magical elements, mythical creatures, and imaginary worlds"
-                        emoji:
-                          type: string
-                          description: Emoji icon for visual representation
-                          example: "🐉"
-                        audience:
-                          type: string
-                          enum: ["general", "young-adult", "adult", "children"]
-                          description: Target audience indicator
-                          example: "general"
-                        colorHint:
-                          type: string
-                          enum: ["primary", "secondary", "accent", "warm", "cool", "dark"]
-                          description: Color scheme hint for UI theming
-                          example: "primary"
-                  defaultGenre:
-                    type: string
-                    description: Default genre for new stories
-                    example: "adventure"
-                  totalCount:
-                    type: integer
-                    description: Total number of supported genres
-                    example: 12
-
-  /api/stories/languages:
-    get:
-      tags:
-        - Metadata
-      summary: Get available languages
-      description: |
-        **Individual Story Architecture v4.0 - Language Statistics**
-        
-        Get all available languages with comprehensive statistics:
-        - Story count per language
-        - Audio availability statistics  
-        - Average translation quality scores
-        - Human-readable language names
-        
-      operationId: getLanguages
-      responses:
-        '200':
-          description: Languages with statistics
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  languages:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        code:
-                          type: string
-                          example: "es"
-                        name:
-                          type: string
-                          example: "Spanish"
-                        storyCount:
-                          type: integer
-                          example: 45
-                        audioCount:
-                          type: integer
-                          example: 32
-                        qualityStats:
-                          type: object
-                          properties:
-                            average:
-                              type: number
-                              example: 87.5
-                            min:
-                              type: integer
-                            max:
-                              type: integer
-                  total:
-                    type: integer
-                    description: Total number of languages
-                  totalStories:
-                    type: integer
-                    description: Total unique stories across all languages
-
-components:
-  schemas:
-    Story:
-      type: object
-      description: Optimized story list response with essential fields only for performance
-      properties:
-        id:
-          type: string
-          example: "future-flavors-unveiled-es"
-        title:
-          type: string
-          example: "Sabores del Futuro Revelados"
-        author:
-          type: string
-          example: "AI Story Weaver"
-        genre:
-          type: string
-          description: Story genre identifier
-          enum:
-            - "fantasy"
-            - "adventure"
-            - "mystery"
-            - "sci-fi"
-            - "romance"
-            - "thriller"
-            - "horror"
-            - "historical"
-            - "comedy"
-            - "drama"
-            - "action"
-            - "children"
-          example: "sci-fi"
-        language:
-          type: string
-          example: "es"
-        thumbnailUrl:
-          type: string
-          nullable: true
-          example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
-        hasAudio:
-          type: boolean
-          description: Whether this story has audio content
-          example: false
-        audioChaptersCount:
-          type: integer
-          description: Number of chapters with audio
-          example: 0
-        totalAudioDuration:
-          type: integer
-          description: Total audio duration in seconds
-          example: 0
-        readingTime:
-          type: integer
-          description: Estimated reading time in minutes
-          example: 25
-        created_at:
-          type: string
-          format: date-time
-    
-    StoryDetailed:
-      type: object
-      description: |
-        **OPTIMIZED v4.1** - Essential story metadata with chapter structure.
-
-        Performance optimized to exclude heavy fields like translation stats,
-        styleGuide, and review objects. Use only for individual story views.
-      properties:
-        id:
-          type: string
-          example: "future-flavors-unveiled-es"
-        title:
-          type: string
-          example: "Sabores del Futuro Revelados"
-        author:
-          type: string
-          example: "AI Story Weaver"
-        description:
-          type: string
-          example: "Un viaje culinario revolucionario que transforma la gastronomía."
-        genre:
-          type: string
-          example: "sci-fi"
-        language:
-          type: string
-          example: "es"
-        readingTime:
-          type: integer
-          description: Estimated reading time in minutes
-          example: 25
-        tags:
-          type: array
-          items:
-            type: string
-          example: ["culinary", "future", "innovation"]
-        totalChapters:
-          type: integer
-          example: 6
-        coverImageUrl:
-          type: string
-          nullable: true
-          example: "/api/content/future-flavors-unveiled-es/image/es/cover.webp"
-        thumbnailUrl:
-          type: string
-          nullable: true
-          example: "/api/content/future-flavors-unveiled-es/image/es/thumbnail.webp"
-        hasAudio:
-          type: boolean
-          description: Whether this story has audio content
-          example: true
-        audioChaptersCount:
-          type: integer
-          description: Number of chapters with audio
-          example: 3
-        totalAudioDuration:
-          type: integer
-          description: Total audio duration in seconds
-          example: 1800
-        avgContentRating:
-          type: number
-          description: Average content rating (0-5)
-          example: 4.2
-        avgAudioRating:
-          type: number
-          description: Average audio rating (0-5)
-          example: 4.5
-        reviewCount:
-          type: integer
-          description: Total number of reviews
-          example: 127
-        chapters:
-          type: array
-          description: Chapter structure with actual uploaded chapter IDs
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                description: Actual chapter ID from upload (not generated)
-                example: "ch_chapter_4b86b0ee"
-              title:
-                type: string
-                example: "First Light"
-              chapterNumber:
-                type: integer
-                example: 1
-              duration:
-                type: integer
-                nullable: true
-                description: Audio duration in seconds (null if no audio)
-                example: 300
-              audioUrl:
-                type: string
-                nullable: true
-                description: Direct audio streaming URL (null if no audio)
-                example: "/api/chapters/future-flavors-unveiled-es/ch_chapter_4b86b0ee/audio"
-              contentUrl:
-                type: string
-                example: "/api/chapters/future-flavors-unveiled-es/ch_chapter_4b86b0ee/content"
-    
-    StoryMetadata:
-      type: object
-      properties:
-        id:
-          type: string
-        title:
-          type: string
-        author:
-          type: string
-        description:
-          type: string
-        language:
-          type: string
-        chapters:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              title:
-                type: string
-              chapterNumber:
-                type: integer
-        assets:
-          type: array
-          items:
-            type: object
-            properties:
-              filename:
-                type: string
-              type:
-                type: string
-              url:
-                type: string
-    
-    ContentBlock:
-      type: object
-      required:
-        - type
-        - content
-      properties:
-        type:
-          type: string
-          enum: [text, heading, image, audio, quote, separator]
-        content:
-          type: string
-        metadata:
-          type: object
-          properties:
-            style:
-              type: string
-            alt_text:
-              type: string
-            duration:
-              type: integer
-            attribution:
-              type: string
-    
-    UserProgress:
-      type: object
-      properties:
-        id:
-          type: string
-        user_id:
-          type: string
-        story_id:
-          type: string
-        chapter_id:
-          type: string
-        progress_percentage:
-          type: number
-          minimum: 0
-          maximum: 100
-        last_read_at:
-          type: string
-          format: date-time
-        reading_time_total:
-          type: integer
-          description: Total reading time in seconds
-        completion_status:
-          type: string
-          enum: [not_started, in_progress, completed]
-        device_last_used:
-          type: string
-        last_position:
-          type: object
-          properties:
-            paragraph_index:
-              type: integer
-            sentence_index:
-              type: integer
-    
-    UserBookmark:
-      type: object
-      properties:
-        id:
-          type: string
-        user_id:
-          type: string
-        story_id:
-          type: string
-        chapter_id:
-          type: string
-          nullable: true
-        type:
-          type: string
-          enum: [story, chapter, quote]
-        title:
-          type: string
-        note:
-          type: string
-          nullable: true
-        quote_text:
-          type: string
-          nullable: true
-        position:
-          type: object
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-    
-    SubscriptionPlan:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        price:
-          type: object
-          properties:
-            amount:
-              type: integer
-            currency:
-              type: string
-            interval:
-              type: string
-              enum: [month, year]
-        features:
-          type: array
-          items:
-            type: string
-        trial_days:
-          type: integer
-          nullable: true
-    
-    Error:
-      type: object
-      properties:
-        error:
-          type: object
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            details:
-              type: object
-              nullable: true
-
-  responses:
-    BadRequest:
-      description: Bad request - invalid parameters
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    
-    Unauthorized:
-      description: Unauthorized - authentication required
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-    
-    InternalError:
-      description: Internal server error
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Auth0 JWT token
-
-tags:
-  - name: Story Discovery
-    description: Browse, search, and discover stories
-  - name: Content Delivery
-    description: Stream and deliver story content
-  - name: User Tracking
-    description: Progress tracking, bookmarks, and personalization
-  - name: Search
-    description: Search and autocomplete functionality
-  - name: Billing
-    description: Subscription and payment management
-  - name: Metadata
-    description: System metadata and configuration
+                    example: Authentication required
+                required:
+                  - error
