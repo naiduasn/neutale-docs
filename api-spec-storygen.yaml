@@ -404,6 +404,252 @@ components:
         - success
         - story_id
         - status
+    StoryPrompt:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique prompt identifier
+          example: a550f4bfff9800d9
+        prompt:
+          type: string
+          description: The story prompt text (high-level plot)
+          example: A young wizard discovers a magical library that contains books from the future
+        location:
+          type: string
+          nullable: true
+          description: Setting or location for the story
+          example: Fantasy Realm
+        genre:
+          type: string
+          nullable: true
+          description: Story genre
+          example: fantasy
+        status:
+          type: string
+          enum:
+            - open
+            - in_progress
+            - done
+            - failed
+            - archived
+          description: Current processing status
+          example: open
+        source:
+          type: string
+          description: Source of the prompt
+          example: manual
+        story_id:
+          type: string
+          nullable: true
+          description: ID of generated story if successful
+          example: story-abc123
+        attempts:
+          type: integer
+          description: Number of generation attempts
+          example: 0
+        error_message:
+          type: string
+          nullable: true
+          description: Error message if generation failed
+          example: Content generation timeout
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Additional metadata as JSON
+          example:
+            source_details: user_submission
+            priority: high
+        created_at:
+          type: string
+          description: Creation timestamp
+          example: 2025-09-21 14:23:42
+        updated_at:
+          type: string
+          description: Last update timestamp
+          example: 2025-09-21 14:23:44
+        processed_at:
+          type: string
+          nullable: true
+          description: Processing completion timestamp
+          example: 2025-09-21 14:25:00
+      required:
+        - id
+        - prompt
+        - status
+        - source
+        - attempts
+        - created_at
+        - updated_at
+    CreatePromptRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: The story prompt text
+          example: A young wizard discovers a magical library that contains books from the future
+        location:
+          type: string
+          description: Setting or location for the story
+          example: Fantasy Realm
+        genre:
+          type: string
+          description: Story genre
+          example: fantasy
+        source:
+          type: string
+          default: manual
+          description: Source of the prompt
+          example: user_submission
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata
+          example:
+            priority: high
+            tags: [adventure, magic]
+      required:
+        - prompt
+    UpdatePromptRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+          minLength: 10
+          maxLength: 2000
+          description: Updated prompt text
+        location:
+          type: string
+          description: Updated location
+        genre:
+          type: string
+          description: Updated genre
+        status:
+          type: string
+          enum:
+            - open
+            - in_progress
+            - done
+            - failed
+            - archived
+          description: Updated status
+        story_id:
+          type: string
+          description: Story ID when marking as completed
+        error_message:
+          type: string
+          description: Error message when marking as failed
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Updated metadata
+    BatchCreatePromptsRequest:
+      type: object
+      properties:
+        prompts:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/CreatePromptRequest"
+          description: Array of prompts to create
+      required:
+        - prompts
+    CompletePromptRequest:
+      type: object
+      properties:
+        story_id:
+          type: string
+          description: ID of the successfully generated story
+          example: story-abc123
+      required:
+        - story_id
+    FailPromptRequest:
+      type: object
+      properties:
+        error_message:
+          type: string
+          description: Error message describing the failure
+          example: Content generation timeout
+      required:
+        - error_message
+    PromptsListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryPrompt"
+          description: Array of story prompts
+        pagination:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Total number of prompts
+              example: 25
+            limit:
+              type: integer
+              description: Items per page
+              example: 10
+            offset:
+              type: integer
+              description: Current offset
+              example: 0
+          required:
+            - total
+            - limit
+            - offset
+      required:
+        - data
+        - pagination
+    PromptStatsResponse:
+      type: object
+      properties:
+        byStatus:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+                example: open
+              count:
+                type: integer
+                example: 15
+              avg_attempts:
+                type: number
+                example: 1.2
+            required:
+              - status
+              - count
+              - avg_attempts
+          description: Statistics grouped by status
+        byGenre:
+          type: array
+          items:
+            type: object
+            properties:
+              genre:
+                type: string
+                example: fantasy
+              count:
+                type: integer
+                example: 8
+              successful:
+                type: integer
+                example: 6
+            required:
+              - genre
+              - count
+              - successful
+          description: Statistics grouped by genre
+      required:
+        - byStatus
+        - byGenre
   parameters: {}
 security:
   - bearerAuth: []
@@ -416,6 +662,8 @@ tags:
     description: Upload related operations
   - name: Content
     description: Content related operations
+  - name: Prompts
+    description: Story prompts management for content generation
 paths:
   /api/health:
     get:
@@ -589,5 +837,591 @@ paths:
                   error:
                     type: string
                     example: Upload not found
+                required:
+                  - error
+  /api/prompts:
+    get:
+      tags:
+        - Prompts
+      summary: List story prompts
+      description: Retrieve a paginated list of story prompts with optional filtering
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - open
+              - in_progress
+              - done
+              - failed
+              - archived
+          description: Filter by prompt status
+          example: open
+        - name: genre
+          in: query
+          schema:
+            type: string
+          description: Filter by story genre
+          example: fantasy
+        - name: location
+          in: query
+          schema:
+            type: string
+          description: Filter by story location
+          example: Medieval England
+        - name: source
+          in: query
+          schema:
+            type: string
+          description: Filter by prompt source
+          example: user_submission
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of prompts per page
+          example: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of prompts to skip
+          example: 0
+      responses:
+        "200":
+          description: List of story prompts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptsListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+    post:
+      tags:
+        - Prompts
+      summary: Create a new story prompt
+      description: Create a single story prompt for content generation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePromptRequest"
+      responses:
+        "201":
+          description: Prompt created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StoryPrompt"
+                required:
+                  - data
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Validation failed
+                  details:
+                    type: array
+                    items:
+                      type: object
+                required:
+                  - error
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Failed to create prompt
+                required:
+                  - error
+  /api/prompts/batch:
+    post:
+      tags:
+        - Prompts
+      summary: Create multiple story prompts
+      description: Create multiple story prompts in a single request (max 100)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchCreatePromptsRequest"
+      responses:
+        "201":
+          description: Prompts created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StoryPrompt"
+                  message:
+                    type: string
+                    example: Created 3 prompts
+                required:
+                  - data
+                  - message
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Validation failed
+                  details:
+                    type: array
+                    items:
+                      type: object
+                required:
+                  - error
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+  /api/prompts/next:
+    get:
+      tags:
+        - Prompts
+      summary: Get next unprocessed prompt
+      description: Retrieve the oldest unprocessed prompt and mark it as in_progress (StoryGen workflow)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Next prompt for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StoryPrompt"
+                required:
+                  - data
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "404":
+          description: No prompts available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: No prompts available
+                required:
+                  - message
+  /api/prompts/stats:
+    get:
+      tags:
+        - Prompts
+      summary: Get prompt statistics
+      description: Retrieve statistics about prompt processing success rates by status and genre
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Prompt processing statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptStatsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+  /api/prompts/{id}:
+    get:
+      tags:
+        - Prompts
+      summary: Get a specific story prompt
+      description: Retrieve detailed information about a specific story prompt
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Prompt ID
+          example: a550f4bfff9800d9
+      responses:
+        "200":
+          description: Story prompt details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StoryPrompt"
+                required:
+                  - data
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "404":
+          description: Prompt not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Prompt not found
+                required:
+                  - error
+    patch:
+      tags:
+        - Prompts
+      summary: Update a story prompt
+      description: Update prompt metadata, status, or other properties
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Prompt ID
+          example: a550f4bfff9800d9
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePromptRequest"
+      responses:
+        "200":
+          description: Prompt updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/StoryPrompt"
+                required:
+                  - data
+        "400":
+          description: Validation failed or no fields to update
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: No fields to update
+                required:
+                  - error
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "404":
+          description: Prompt not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Prompt not found
+                required:
+                  - error
+    delete:
+      tags:
+        - Prompts
+      summary: Delete (archive) a story prompt
+      description: Soft delete a prompt by setting its status to archived
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Prompt ID
+          example: a550f4bfff9800d9
+      responses:
+        "200":
+          description: Prompt archived successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Prompt archived successfully
+                required:
+                  - message
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "404":
+          description: Prompt not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Prompt not found
+                required:
+                  - error
+  /api/prompts/{id}/complete:
+    post:
+      tags:
+        - Prompts
+      summary: Mark prompt as successfully processed
+      description: Mark a prompt as completed and link it to the generated story (StoryGen workflow)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Prompt ID
+          example: a550f4bfff9800d9
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompletePromptRequest"
+      responses:
+        "200":
+          description: Prompt marked as completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Prompt marked as completed
+                required:
+                  - message
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Validation failed
+                required:
+                  - error
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "404":
+          description: Prompt not found or not in progress
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Prompt not found
+                required:
+                  - error
+  /api/prompts/{id}/fail:
+    post:
+      tags:
+        - Prompts
+      summary: Mark prompt as failed
+      description: Mark a prompt as failed with an error message and increment attempt counter (StoryGen workflow)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Prompt ID
+          example: a550f4bfff9800d9
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FailPromptRequest"
+      responses:
+        "200":
+          description: Prompt marked as failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Prompt marked as failed
+                required:
+                  - message
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Validation failed
+                required:
+                  - error
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Unauthorized
+                required:
+                  - error
+        "404":
+          description: Prompt not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Prompt not found
                 required:
                   - error
